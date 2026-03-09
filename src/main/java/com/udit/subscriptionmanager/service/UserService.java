@@ -4,7 +4,11 @@ import com.udit.subscriptionmanager.entity.User;
 import com.udit.subscriptionmanager.entity.Household;
 import com.udit.subscriptionmanager.repository.HouseholdRepository;
 import com.udit.subscriptionmanager.repository.UserRepository;
+
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -13,10 +17,12 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
     private final UserRepository userRepository;
     private final HouseholdRepository householdRepository;
+    private final PasswordEncoder passwordEncoder;
 
-
+    @Transactional
     public User registerUser(String email,
                              String password,
                              String fullName,
@@ -30,10 +36,13 @@ public class UserService {
 
         User user = User.builder()
                 .email(email)
-                .password(password) // hashing later
+                .password(passwordEncoder.encode(password))   // hash password
                 .fullName(fullName)
                 .createdAt(LocalDateTime.now())
                 .build();
+
+        // save user first
+        User savedUser = userRepository.save(user);
 
         // CASE 1: create household + admin
         if (createHousehold) {
@@ -41,9 +50,6 @@ public class UserService {
             if (householdName == null || householdName.isBlank()) {
                 throw new RuntimeException("Household name is required");
             }
-
-            // save user first (needed for FK)
-            User savedUser = userRepository.save(user);
 
             Household household = Household.builder()
                     .name(householdName)
@@ -53,16 +59,14 @@ public class UserService {
 
             Household savedHousehold = householdRepository.save(household);
 
-            // link user back to household
             savedUser.setHousehold(savedHousehold);
 
             return userRepository.save(savedUser);
         }
 
         // CASE 2: solo user
-        return userRepository.save(user);
+        return savedUser;
     }
-
 
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
