@@ -32,8 +32,19 @@ public class User {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private String timeZone = "UTC";
+
     @ManyToOne
     @JoinColumn(name = "household_id")
     private Household household;
+
+    @PrePersist
+    protected void onCreate() {
+        if (timeZone == null) {
+            timeZone = "UTC";
+        }
+    }
 
 }
