@@ -1,20 +1,21 @@
 package com.udit.subscriptionmanager.service;
 
-import com.udit.subscriptionmanager.entity.Subscription;
-import com.udit.subscriptionmanager.entity.User;
-import com.udit.subscriptionmanager.repository.SubscriptionRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.udit.subscriptionmanager.entity.Subscription;
+import com.udit.subscriptionmanager.entity.User;
+import com.udit.subscriptionmanager.repository.SubscriptionRepository;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
