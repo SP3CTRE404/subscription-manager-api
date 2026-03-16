@@ -7,6 +7,7 @@ import com.udit.subscriptionmanager.repository.HouseholdRepository;
 import com.udit.subscriptionmanager.repository.SubscriptionRepository;
 import com.udit.subscriptionmanager.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,8 +16,11 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.springframework.scheduling.annotation.Scheduled;
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SubscriptionService {
 
     private final SubscriptionRepository subscriptionRepository;
@@ -136,5 +140,43 @@ public class SubscriptionService {
                 yield lastDate.plusDays(customDays);
             }
         };
+    }
+
+    /**
+     * Periodically checks for subscriptions whose billing date has passed 
+     * and automatically increments their nextBillingDate.
+     * Runs daily at 1:00 AM server time.
+     */
+    @Scheduled(cron = "0 0 1 * * ?")
+    @Transactional
+    public void processAutomaticRenewals() {
+        log.info("Starting automatic renewal process for expired subscriptions.");
+        
+        LocalDate today = LocalDate.now();
+        List<Subscription> expiredSubscriptions = subscriptionRepository.findByNextBillingDateBefore(today);
+        
+        int renewalCount = 0;
+        for (Subscription sub : expiredSubscriptions) {
+            if (sub.getNextBillingDate() == null || sub.getBillingCycle() == null) {
+                log.warn("Subscription {} is missing date or cycle info.", sub.getId());
+                continue;
+            }
+            
+            LocalDate newDate = calculateNextDate(sub.getNextBillingDate(), sub.getBillingCycle(), sub.getCustomIntervalDays());
+            
+            // Safety measure: if the cycle is very small and it's far behind, optionally loop until in future.
+            // For now, one simple increment is expected as the job runs daily.
+            while (newDate.isBefore(today)) {
+                newDate = calculateNextDate(newDate, sub.getBillingCycle(), sub.getCustomIntervalDays());
+            }
+
+            sub.setNextBillingDate(newDate);
+            subscriptionRepository.save(sub);
+            
+            log.info("Renewed subscription '{}' (ID: {}). New billing date is {}.", sub.getServiceName(), sub.getId(), newDate);
+            renewalCount++;
+        }
+        
+        log.info("Finished automatic renewal process. Renewed {} subscriptions.", renewalCount);
     }
 }

@@ -8,5 +8,6 @@ import java.util.List;
 public interface SubscriptionRepository extends JpaRepository<Subscription, Long> {
     List<Subscription> findByUserId(Long userId);
     List<Subscription> findByHouseholdId(Long householdId);
+    List<Subscription> findByNextBillingDateBefore(LocalDate date);
     List<Subscription> findByNextBillingDate(LocalDate date);
 }
