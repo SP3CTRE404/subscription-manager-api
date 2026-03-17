@@ -31,22 +31,24 @@ public class SubscriptionService {
 
     @Transactional
     public SubscriptionResponse createSubscription(SubscriptionRequest request) {
+        // 1. STRICT ENFORCEMENT: A subscription MUST belong to a specific person
+        if (request.getUserId() == null) {
+            throw new RuntimeException("A subscription must belong to a specific user.");
+        }
+
+        User owner = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         Subscription.SubscriptionBuilder builder = Subscription.builder()
                 .serviceName(request.getServiceName())
                 .amount(request.getAmount())
                 .billingCycle(request.getBillingCycle())
                 .customIntervalDays(request.getCustomIntervalDays())
                 .nextBillingDate(request.getNextBillingDate())
-                .isAutoPay(request.getIsAutoPay() != null ? request.getIsAutoPay() : Boolean.TRUE);
+                .isAutoPay(request.getIsAutoPay() != null ? request.getIsAutoPay() : Boolean.TRUE)
+                .user(owner); // Assigns the subscription to the payer in the database
 
-        // Link to User if provided (Solo/Private subscription)
-        if (request.getUserId() != null) {
-            User user = userRepository.findById(request.getUserId())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-            builder.user(user);
-        }
-
-        // Link to Household if provided (Shared subscription)
+        // 2. Optional: Link to household for Admin viewing
         if (request.getHouseholdId() != null) {
             Household household = householdRepository.findById(request.getHouseholdId())
                     .orElseThrow(() -> new RuntimeException("Household not found"));
@@ -57,34 +59,23 @@ public class SubscriptionService {
         return convertToResponse(savedSub);
     }
 
+    /**
+     * Calculates the total monthly "burn rate" for a specific user.
+     * Uses a strict "Payer Model": The user assumes 100% of the cost for any
+     * subscription they own, even if it is linked to a household.
+     */
     @Transactional(readOnly = true)
     public BigDecimal calculateTotalMonthlyCostForUser(Long userId) {
-        User user = userRepository.findById(userId)
+        userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 1. Get solo subscriptions
-        List<Subscription> soloSubs = subscriptionRepository.findByUserId(userId);
-        BigDecimal soloTotal = soloSubs.stream()
+        // Fetch ONLY the subscriptions where this user is the payer
+        List<Subscription> userSubs = subscriptionRepository.findByUserId(userId);
+
+        // Sum their monthly equivalents without any split logic
+        return userSubs.stream()
                 .map(this::calculateMonthlyEquivalent)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // 2. Get household subscriptions (if any)
-        BigDecimal householdShare = BigDecimal.ZERO;
-        if (user.getHousehold() != null) {
-            List<Subscription> householdSubs = subscriptionRepository.findByHouseholdId(user.getHousehold().getId());
-            int memberCount = user.getHousehold().getMembers().size();
-
-            if (memberCount > 0) {
-                BigDecimal totalHouseholdMonthly = householdSubs.stream()
-                        .map(this::calculateMonthlyEquivalent)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-                // Divide total household cost by number of members
-                householdShare = totalHouseholdMonthly.divide(BigDecimal.valueOf(memberCount), 2, RoundingMode.HALF_UP);
-            }
-        }
-
-        return soloTotal.add(householdShare);
     }
 
     private SubscriptionResponse convertToResponse(Subscription sub) {

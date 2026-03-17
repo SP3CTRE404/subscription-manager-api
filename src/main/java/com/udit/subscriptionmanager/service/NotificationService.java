@@ -19,28 +19,18 @@ public class NotificationService {
 
     private final SubscriptionRepository subscriptionRepository;
 
-    /**
-     * Checks for subscriptions due in 3 days and 1 day and sends notifications.
-     * Runs daily at 8:00 AM server time.
-     */
     @Scheduled(cron = "0 0 8 * * ?")
     @Transactional(readOnly = true)
     public void checkAndSendNotifications() {
-        log.info("Starting daily check for upcoming subscription payments.");
-        
-        // Fetch ALL subscriptions rather than those with specific dates since 
-        // the definition of "today" varies per user timezone.
-        // Assuming we want active subscriptions, we can just grab all or paginate.
-        // For efficiency, you might want to only fetch subscriptions due in the next ~5 days UTC, 
-        // but for safety in this model we'll check against active subscriptions.
+        log.info("Starting daily check for upcoming and overdue subscription payments.");
+
         List<Subscription> allSubscriptions = subscriptionRepository.findAll();
 
         for (Subscription sub : allSubscriptions) {
             if (sub.getNextBillingDate() == null) continue;
 
-            User targetUser = sub.getUser() != null ? sub.getUser() : 
-                    (sub.getHousehold() != null ? sub.getHousehold().getAdmin() : null);
-
+            // Updated to the Strict Payer Model: Notifications go directly to the user who owns it
+            User targetUser = sub.getUser();
             if (targetUser == null) continue;
 
             String timeZoneStr = targetUser.getTimeZone() != null ? targetUser.getTimeZone() : "UTC";
@@ -50,38 +40,35 @@ public class NotificationService {
             long daysUntilBilling = java.time.temporal.ChronoUnit.DAYS.between(userToday, sub.getNextBillingDate());
 
             if (daysUntilBilling == 3 || daysUntilBilling == 1) {
-                notifyUsers(List.of(sub), (int) daysUntilBilling);
+                notifyUser(sub, (int) daysUntilBilling, "Upcoming");
+            } else if (daysUntilBilling == 0) {
+                notifyUser(sub, 0, "Due Today");
+            } else if (daysUntilBilling < 0 && (sub.getIsAutoPay() != null && !sub.getIsAutoPay())) {
+                // Overdue Nag: Remind them every 3 days if a manual bill is past due
+                if (Math.abs(daysUntilBilling) % 3 == 0) {
+                    notifyUser(sub, (int) daysUntilBilling, "OVERDUE");
+                }
             }
         }
 
-        log.info("Finished daily check for upcoming subscription payments.");
+        log.info("Finished daily check for subscription payments.");
     }
 
-    private void notifyUsers(List<Subscription> subscriptions, int daysLeft) {
-        for (Subscription sub : subscriptions) {
-            String email = null;
-            if (sub.getUser() != null) {
-                email = sub.getUser().getEmail();
-            } else if (sub.getHousehold() != null && sub.getHousehold().getAdmin() != null) {
-                // If it's a household subscription, notify the household admin
-                email = sub.getHousehold().getAdmin().getEmail();
-            }
+    private void notifyUser(Subscription sub, int daysLeft, String type) {
+        String email = sub.getUser().getEmail();
+        String message;
 
-            if (email != null) {
-                // Formatting simulated email content
-                String message = String.format(
-                        "Notification for [%s]: Your subscription for '%s' will charge $%s on %s (in %d day%s).",
-                        email,
-                        sub.getServiceName(),
-                        sub.getAmount(),
-                        sub.getNextBillingDate(),
-                        daysLeft,
-                        daysLeft == 1 ? "" : "s"
-                );
-                log.info("--- EMAIL SIMULATION --- {}", message);
-            } else {
-                log.warn("Could not determine email to notify for subscription ID: {}", sub.getId());
-            }
+        if (type.equals("Due Today")) {
+            message = String.format("Notification for [%s]: Your subscription for '%s' ($%s) is DUE TODAY.",
+                    email, sub.getServiceName(), sub.getAmount());
+        } else if (type.equals("OVERDUE")) {
+            message = String.format("URGENT for [%s]: Your manual subscription for '%s' ($%s) is OVERDUE by %d days. Please take necessary actions and mark it as paid.",
+                    email, sub.getServiceName(), sub.getAmount(), Math.abs(daysLeft));
+        } else {
+            message = String.format("Notification for [%s]: Your subscription for '%s' will charge $%s on %s (in %d day%s).",
+                    email, sub.getServiceName(), sub.getAmount(), sub.getNextBillingDate(), daysLeft, daysLeft == 1 ? "" : "s");
         }
+
+        log.info("--- EMAIL SIMULATION ({}) --- {}", type, message);
     }
 }
