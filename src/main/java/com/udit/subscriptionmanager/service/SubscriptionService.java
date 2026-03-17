@@ -29,11 +29,6 @@ public class SubscriptionService {
     private final HouseholdRepository householdRepository;
     private final SubscriptionHistoryRepository subscriptionHistoryRepository;
 
-    /**
-     * Proper Fix: Converts the Entity to a DTO before returning it.
-     * This avoids LazyInitializationException by accessing relationships
-     * while the Hibernate session is still open.
-     */
     @Transactional
     public SubscriptionResponse createSubscription(SubscriptionRequest request) {
         Subscription.SubscriptionBuilder builder = Subscription.builder()
@@ -42,7 +37,7 @@ public class SubscriptionService {
                 .billingCycle(request.getBillingCycle())
                 .customIntervalDays(request.getCustomIntervalDays())
                 .nextBillingDate(request.getNextBillingDate())
-                .isAutoPay(request.getIsAutoPay() != null ? request.getIsAutoPay() : true);
+                .isAutoPay(request.getIsAutoPay() != null ? request.getIsAutoPay() : Boolean.TRUE);
 
         // Link to User if provided (Solo/Private subscription)
         if (request.getUserId() != null) {
@@ -62,10 +57,6 @@ public class SubscriptionService {
         return convertToResponse(savedSub);
     }
 
-    /**
-     * Calculates the total monthly "burn rate" for a specific user,
-     * including their solo subs and their share of household subs.
-     */
     @Transactional(readOnly = true)
     public BigDecimal calculateTotalMonthlyCostForUser(Long userId) {
         User user = userRepository.findById(userId)
@@ -96,9 +87,6 @@ public class SubscriptionService {
         return soloTotal.add(householdShare);
     }
 
-    /**
-     * Helper to map Entity to DTO safely.
-     */
     private SubscriptionResponse convertToResponse(Subscription sub) {
         return SubscriptionResponse.builder()
                 .id(sub.getId())
@@ -106,15 +94,12 @@ public class SubscriptionService {
                 .amount(sub.getAmount())
                 .billingCycle(sub.getBillingCycle())
                 .nextBillingDate(sub.getNextBillingDate())
-                .isAutoPay(sub.getIsAutoPay() != null ? sub.getIsAutoPay() : true)
+                .isAutoPay(sub.getIsAutoPay() != null ? sub.getIsAutoPay() : Boolean.TRUE)
                 .ownerEmail(sub.getUser() != null ? sub.getUser().getEmail() : null)
                 .householdName(sub.getHousehold() != null ? sub.getHousehold().getName() : null)
                 .build();
     }
 
-    /**
-     * Normalises all costs to a "Monthly" average for budgeting.
-     */
     public BigDecimal calculateMonthlyEquivalent(Subscription sub) {
         return switch (sub.getBillingCycle()) {
             case MONTHLY -> sub.getAmount();
@@ -131,9 +116,6 @@ public class SubscriptionService {
         };
     }
 
-    /**
-     * Calculates the next billing date based on the cycle type.
-     */
     public LocalDate calculateNextDate(LocalDate lastDate, BillingCycle cycle, Integer customDays) {
         return switch (cycle) {
             case MONTHLY -> lastDate.plusMonths(1);
@@ -146,38 +128,32 @@ public class SubscriptionService {
         };
     }
 
-    /**
-     * Periodically checks for subscriptions whose billing date has passed 
-     * and automatically increments their nextBillingDate.
-     * Records History of each triggered cycle.
-     * Runs daily at 1:00 AM server time.
-     */
     @Scheduled(cron = "0 0 1 * * ?")
     @Transactional
     public void processAutomaticRenewals() {
         log.info("Starting automatic renewal process for expired subscriptions.");
-        
+
         LocalDate today = LocalDate.now();
         List<Subscription> expiredSubscriptions = subscriptionRepository.findByNextBillingDateBefore(today);
-        
+
         int renewalCount = 0;
         for (Subscription sub : expiredSubscriptions) {
             if (sub.getNextBillingDate() == null || sub.getBillingCycle() == null) {
                 log.warn("Subscription {} is missing date or cycle info.", sub.getId());
                 continue;
             }
-            
+
             // Skip manual payment subscriptions - they remain "past due" until confirmed by the user.
             if (sub.getIsAutoPay() != null && !sub.getIsAutoPay()) {
                 continue;
             }
-            
+
             LocalDate historyDate = sub.getNextBillingDate();
             LocalDate newDate = calculateNextDate(historyDate, sub.getBillingCycle(), sub.getCustomIntervalDays());
-            
+
             recordHistory(sub, historyDate);
 
-            // Safety measure: if the cycle is very small and it's far behind, optionally loop until in future.
+            // Safety measure: if the cycle is very small, and it's far behind, optionally loop until in the future.
             while (newDate.isBefore(today)) {
                 historyDate = newDate;
                 newDate = calculateNextDate(newDate, sub.getBillingCycle(), sub.getCustomIntervalDays());
@@ -186,11 +162,11 @@ public class SubscriptionService {
 
             sub.setNextBillingDate(newDate);
             subscriptionRepository.save(sub);
-            
+
             log.info("Renewed subscription '{}' (ID: {}). New billing date is {}.", sub.getServiceName(), sub.getId(), newDate);
             renewalCount++;
         }
-        
+
         log.info("Finished automatic renewal process. Renewed {} subscriptions.", renewalCount);
     }
 
@@ -208,42 +184,61 @@ public class SubscriptionService {
     public List<SubscriptionHistory> getHistory(Long subscriptionId) {
         return subscriptionHistoryRepository.findBySubscriptionIdOrderByPaymentDateDesc(subscriptionId);
     }
-    
-    /**
-     * Explicitly confirms a manual payment has been made, advancing the requested
-     * subscription to the next billing cycle and recording the history.
-     */
+
     @Transactional
     public SubscriptionResponse confirmManualPayment(Long subscriptionId) {
         Subscription sub = subscriptionRepository.findById(subscriptionId)
                 .orElseThrow(() -> new RuntimeException("Subscription not found"));
-                
+
         if (sub.getIsAutoPay() != null && sub.getIsAutoPay()) {
             throw new RuntimeException("Cannot manually confirm an auto-pay subscription");
         }
-        
+
         LocalDate today = LocalDate.now();
         if (sub.getNextBillingDate().isAfter(today)) {
             throw new RuntimeException("Subscription is not due yet");
         }
-        
+
         LocalDate historyDate = sub.getNextBillingDate();
         LocalDate newDate = calculateNextDate(historyDate, sub.getBillingCycle(), sub.getCustomIntervalDays());
-        
+
         recordHistory(sub, historyDate);
-        
+
         // Loop forward if they missed multiple payments
         while (newDate.isBefore(today)) {
             historyDate = newDate;
             newDate = calculateNextDate(newDate, sub.getBillingCycle(), sub.getCustomIntervalDays());
             recordHistory(sub, historyDate);
         }
-        
+
         sub.setNextBillingDate(newDate);
         Subscription savedSub = subscriptionRepository.save(sub);
-        
+
         log.info("Manually confirmed payment for subscription '{}' (ID: {}). New billing date is {}.", sub.getServiceName(), sub.getId(), newDate);
-        
+
         return convertToResponse(savedSub);
+    }
+
+    @Transactional
+    public SubscriptionResponse toggleAutoPay(Long subscriptionId) {
+        Subscription sub = subscriptionRepository.findById(subscriptionId)
+                .orElseThrow(() -> new RuntimeException("Subscription not found"));
+
+        sub.setIsAutoPay(!sub.getIsAutoPay());
+
+        Subscription savedSub = subscriptionRepository.save(sub);
+        return convertToResponse(savedSub);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SubscriptionResponse> getDueSubscriptionsForUser(Long userId) {
+        LocalDate today = LocalDate.now();
+
+        return subscriptionRepository.findByNextBillingDateBefore(today).stream()
+                .filter(sub -> (sub.getUser() != null && sub.getUser().getId().equals(userId)) ||
+                        (sub.getHousehold() != null && sub.getHousehold().getAdmin().getId().equals(userId)))
+                .filter(sub -> sub.getIsAutoPay() != null && !sub.getIsAutoPay())
+                .map(this::convertToResponse)
+                .toList();
     }
 }
