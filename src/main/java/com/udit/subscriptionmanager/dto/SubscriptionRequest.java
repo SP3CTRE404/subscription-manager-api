@@ -13,6 +13,7 @@ public class SubscriptionRequest {
     private BillingCycle billingCycle;
     private Integer customIntervalDays;
     private LocalDate nextBillingDate;
+    private Boolean isAutoPay;          // Can specify if this is an auto-renewing sub
     private Long userId;        // The user who owns it
     private Long householdId;   // Optional: The household it belongs to
 }

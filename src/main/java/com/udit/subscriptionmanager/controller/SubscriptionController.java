@@ -32,4 +32,14 @@ public class SubscriptionController {
     public ResponseEntity<BigDecimal> getMonthlyTotal(@PathVariable Long userId) {
         return ResponseEntity.ok(subscriptionService.calculateTotalMonthlyCostForUser(userId));
     }
+
+    @GetMapping("/{id}/history")
+    public ResponseEntity<java.util.List<com.udit.subscriptionmanager.entity.SubscriptionHistory>> getSubscriptionHistory(@PathVariable Long id) {
+        return ResponseEntity.ok(subscriptionService.getHistory(id));
+    }
+
+    @PostMapping("/{id}/pay")
+    public ResponseEntity<SubscriptionResponse> confirmManualPayment(@PathVariable Long id) {
+        return ResponseEntity.ok(subscriptionService.confirmManualPayment(id));
+    }
 }

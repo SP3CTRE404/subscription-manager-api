@@ -31,6 +31,13 @@ public class Subscription {
 
     @Column(nullable = false)
     private LocalDate nextBillingDate;
+    
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    @Builder.Default
+    private Boolean isAutoPay = true;
+
+    // A subscription can either belong to one user (Solo Subscription)
+    // OR it can belong to a household (Shared Subscription);
 
     @ManyToOne
     @JoinColumn(name = "user_id")
