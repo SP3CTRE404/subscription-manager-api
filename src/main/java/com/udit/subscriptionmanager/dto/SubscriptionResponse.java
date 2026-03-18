@@ -13,6 +13,8 @@ public class SubscriptionResponse {
     private BillingCycle billingCycle;
     private LocalDate nextBillingDate;
     private Boolean isAutoPay;
-    private String ownerEmail; // Cleaner than returning the whole User object
-    private String householdName; // Cleaner than returning the whole Household object
+    private Long ownerId;
+    private String ownerName;
+    private String ownerEmail;
+    private String householdName;
 }

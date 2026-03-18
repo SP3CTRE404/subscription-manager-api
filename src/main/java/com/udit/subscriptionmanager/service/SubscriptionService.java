@@ -86,6 +86,8 @@ public class SubscriptionService {
                 .billingCycle(sub.getBillingCycle())
                 .nextBillingDate(sub.getNextBillingDate())
                 .isAutoPay(sub.getIsAutoPay() != null ? sub.getIsAutoPay() : Boolean.TRUE)
+                .ownerId(sub.getUser() != null ? sub.getUser().getId() : null)               // Maps the ID
+                .ownerName(sub.getUser() != null ? sub.getUser().getFullName() : null)       // Maps the Full Name
                 .ownerEmail(sub.getUser() != null ? sub.getUser().getEmail() : null)
                 .householdName(sub.getHousehold() != null ? sub.getHousehold().getName() : null)
                 .build();

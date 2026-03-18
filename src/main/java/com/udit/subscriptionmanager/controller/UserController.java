@@ -1,11 +1,16 @@
 package com.udit.subscriptionmanager.controller;
 
 import com.udit.subscriptionmanager.entity.User;
+import com.udit.subscriptionmanager.security.CustomUserDetailsService;
+import com.udit.subscriptionmanager.security.JwtService;
 import com.udit.subscriptionmanager.service.UserService;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,6 +19,22 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final AuthenticationManager authenticationManager;
+    private final CustomUserDetailsService userDetailsService;
+    private final JwtService jwtService;
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        request.getEmail(),
+                        request.getPassword()
+                )
+        );
+        var userDetails = userDetailsService.loadUserByUsername(request.getEmail());
+        var jwtToken = jwtService.generateToken(userDetails);
+        return ResponseEntity.ok(new LoginResponse(jwtToken));
+    }
 
     @PostMapping("/register")
     public ResponseEntity<User> registerUser(@RequestBody RegisterRequest request) {
@@ -27,6 +48,20 @@ public class UserController {
         );
 
         return ResponseEntity.ok(savedUser);
+    }
+
+    @Setter
+    @Getter
+    public static class LoginRequest {
+        private String email;
+        private String password;
+    }
+
+    @Setter
+    @Getter
+    @AllArgsConstructor
+    public static class LoginResponse {
+        private String token;
     }
 
     // DTO for request
