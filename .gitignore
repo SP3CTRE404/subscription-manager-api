@@ -18,7 +18,7 @@ src/test/
 *.iws
 *.iml
 *.ipr
-
+docker-compose.yml
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
