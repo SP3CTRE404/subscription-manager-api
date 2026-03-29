@@ -11,5 +11,4 @@ public class SubscriptionmanagerApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(SubscriptionmanagerApplication.class, args);
 	}
-
 }
