@@ -17,6 +17,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.springframework.lang.NonNull;
 import org.springframework.scheduling.annotation.Scheduled;
 
 @Service
@@ -36,7 +37,8 @@ public class SubscriptionService {
             throw new RuntimeException("A subscription must belong to a specific user.");
         }
 
-        User owner = userRepository.findById(request.getUserId())
+        Long userId = request.getUserId();
+        User owner = userRepository.findById(java.util.Objects.requireNonNull(userId))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         Subscription.SubscriptionBuilder builder = Subscription.builder()
@@ -50,12 +52,14 @@ public class SubscriptionService {
 
         // 2. Optional: Link to household for Admin viewing
         if (request.getHouseholdId() != null) {
-            Household household = householdRepository.findById(request.getHouseholdId())
+            Long householdId = request.getHouseholdId();
+            Household household = householdRepository.findById(java.util.Objects.requireNonNull(householdId))
                     .orElseThrow(() -> new RuntimeException("Household not found"));
             builder.household(household);
         }
 
-        Subscription savedSub = subscriptionRepository.save(builder.build());
+        Subscription subscriptionToSave = builder.build();
+        Subscription savedSub = subscriptionRepository.save(java.util.Objects.requireNonNull(subscriptionToSave));
         return convertToResponse(savedSub);
     }
 
@@ -65,7 +69,7 @@ public class SubscriptionService {
      * subscription they own, even if it is linked to a household.
      */
     @Transactional(readOnly = true)
-    public BigDecimal calculateTotalMonthlyCostForUser(Long userId) {
+    public BigDecimal calculateTotalMonthlyCostForUser(@NonNull Long userId) {
         userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -170,7 +174,7 @@ public class SubscriptionService {
                 .paymentDate(paymentDate)
                 .recordedAt(java.time.LocalDateTime.now())
                 .build();
-        subscriptionHistoryRepository.save(history);
+        subscriptionHistoryRepository.save(java.util.Objects.requireNonNull(history));
     }
 
     @Transactional(readOnly = true)
@@ -179,7 +183,7 @@ public class SubscriptionService {
     }
 
     @Transactional
-    public SubscriptionResponse confirmManualPayment(Long subscriptionId) {
+    public SubscriptionResponse confirmManualPayment(@NonNull Long subscriptionId) {
         Subscription sub = subscriptionRepository.findById(subscriptionId)
                 .orElseThrow(() -> new RuntimeException("Subscription not found"));
 
@@ -213,7 +217,7 @@ public class SubscriptionService {
     }
 
     @Transactional
-    public SubscriptionResponse toggleAutoPay(Long subscriptionId) {
+    public SubscriptionResponse toggleAutoPay(@NonNull Long subscriptionId) {
         Subscription sub = subscriptionRepository.findById(subscriptionId)
                 .orElseThrow(() -> new RuntimeException("Subscription not found"));
 

@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -42,7 +41,7 @@ public class UserService {
                 .build();
 
         // save user first
-        User savedUser = userRepository.save(user);
+        User savedUser = userRepository.save(java.util.Objects.requireNonNull(user));
 
         // CASE 1: create household + admin
         if (createHousehold) {
@@ -57,7 +56,7 @@ public class UserService {
                     .admin(savedUser)
                     .build();
 
-            Household savedHousehold = householdRepository.save(household);
+            Household savedHousehold = householdRepository.save(java.util.Objects.requireNonNull(household));
 
             savedUser.setHousehold(savedHousehold);
 

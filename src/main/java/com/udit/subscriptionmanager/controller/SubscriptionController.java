@@ -50,7 +50,7 @@ public class SubscriptionController {
     @GetMapping("/user/{userId}/monthly-total")
     public ResponseEntity<BigDecimal> getMonthlyTotal(@PathVariable Long userId, Authentication authentication) {
         verifyUserAccess(userId, authentication);
-        return ResponseEntity.ok(subscriptionService.calculateTotalMonthlyCostForUser(userId));
+        return ResponseEntity.ok(subscriptionService.calculateTotalMonthlyCostForUser(java.util.Objects.requireNonNull(userId)));
     }
 
     @GetMapping("/user/{userId}/due")
@@ -66,11 +66,11 @@ public class SubscriptionController {
 
     @PostMapping("/{id}/pay")
     public ResponseEntity<SubscriptionResponse> confirmManualPayment(@PathVariable Long id) {
-        return ResponseEntity.ok(subscriptionService.confirmManualPayment(id));
+        return ResponseEntity.ok(subscriptionService.confirmManualPayment(java.util.Objects.requireNonNull(id)));
     }
 
     @PostMapping("/{id}/toggle-autopay")
     public ResponseEntity<SubscriptionResponse> toggleAutoPay(@PathVariable Long id) {
-        return ResponseEntity.ok(subscriptionService.toggleAutoPay(id));
+        return ResponseEntity.ok(subscriptionService.toggleAutoPay(java.util.Objects.requireNonNull(id)));
     }
 }
