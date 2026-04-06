@@ -1,6 +1,7 @@
 package com.udit.subscriptionmanager.controller;
 
 import com.udit.subscriptionmanager.entity.User;
+import com.udit.subscriptionmanager.security.CustomUserDetails;
 import com.udit.subscriptionmanager.security.CustomUserDetailsService;
 import com.udit.subscriptionmanager.security.JwtService;
 import com.udit.subscriptionmanager.service.UserService;
@@ -31,9 +32,9 @@ public class UserController {
                         request.getPassword()
                 )
         );
-        var userDetails = userDetailsService.loadUserByUsername(request.getEmail());
+        var userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(request.getEmail());
         var jwtToken = jwtService.generateToken(userDetails);
-        return ResponseEntity.ok(new LoginResponse(jwtToken));
+        return ResponseEntity.ok(new LoginResponse(jwtToken, userDetails.getUser()));
     }
 
     @PostMapping("/register")
@@ -62,6 +63,7 @@ public class UserController {
     @AllArgsConstructor
     public static class LoginResponse {
         private String token;
+        private User user;
     }
 
     // DTO for request

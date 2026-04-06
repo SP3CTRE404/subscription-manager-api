@@ -41,9 +41,20 @@ public class SubscriptionController {
     }
 
     @PostMapping("/add")
-    public ResponseEntity<SubscriptionResponse> addSubscription(@RequestBody SubscriptionRequest request, Authentication authentication) {
-        // Prevent User A from adding a subscription to User B's account
-        verifyUserAccess(request.getUserId(), authentication);
+    public ResponseEntity<SubscriptionResponse> addSubscription(
+            @RequestBody SubscriptionRequest request, 
+            Authentication authentication) {
+        
+        // 1. Get the logged-in user's email from the JWT token
+        String loggedInEmail = authentication.getName(); 
+        
+        // 2. Fetch the user from the database using the email
+        User loggedInUser = userService.findByEmail(loggedInEmail)
+                .orElseThrow(() -> new RuntimeException("Logged in user not found"));
+                
+        // 3. Manually set the userId in the request payload
+        request.setUserId(loggedInUser.getId());
+        
         return ResponseEntity.ok(subscriptionService.createSubscription(request));
     }
 
