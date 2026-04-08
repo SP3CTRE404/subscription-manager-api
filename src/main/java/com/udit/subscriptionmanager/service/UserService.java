@@ -5,6 +5,7 @@ import com.udit.subscriptionmanager.entity.User;
 import com.udit.subscriptionmanager.entity.Household;
 import com.udit.subscriptionmanager.repository.HouseholdRepository;
 import com.udit.subscriptionmanager.repository.UserRepository;
+import com.udit.subscriptionmanager.exception.BadRequestException;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +32,7 @@ public class UserService {
 
         // prevent duplicate email
         if (userRepository.existsByEmail(email)) {
-            throw new RuntimeException("Email already registered");
+            throw new BadRequestException("Email already registered");
         }
 
         User user = User.builder()
@@ -48,7 +49,7 @@ public class UserService {
         if (createHousehold) {
 
             if (householdName == null || householdName.isBlank()) {
-                throw new RuntimeException("Household name is required");
+                throw new BadRequestException("Household name is required");
             }
 
             Household household = Household.builder()
@@ -91,10 +92,10 @@ public class UserService {
     @Transactional
     public void changePassword(User user, String currentPassword, String newPassword) {
         if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
-            throw new RuntimeException("Current password is incorrect.");
+            throw new BadRequestException("Current password is incorrect.");
         }
         if (newPassword == null || newPassword.length() < 6) {
-            throw new RuntimeException("New password must be at least 6 characters.");
+            throw new BadRequestException("New password must be at least 6 characters.");
         }
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);

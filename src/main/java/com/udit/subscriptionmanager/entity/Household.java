@@ -31,7 +31,7 @@ public class Household {
     private String inviteCode;
 
     @OneToOne
-    @JoinColumn(name = "admin_Id")
+    @JoinColumn(name = "admin_id")
     @JsonBackReference
     private User admin;
 

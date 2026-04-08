@@ -10,6 +10,9 @@ import com.udit.subscriptionmanager.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import com.udit.subscriptionmanager.exception.BadRequestException;
+import com.udit.subscriptionmanager.exception.ResourceNotFoundException;
+import com.udit.subscriptionmanager.exception.UnauthorizedException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -34,12 +37,16 @@ public class SubscriptionService {
     public SubscriptionResponse createSubscription(SubscriptionRequest request) {
         // 1. STRICT ENFORCEMENT: A subscription MUST belong to a specific person
         if (request.getUserId() == null) {
-            throw new RuntimeException("A subscription must belong to a specific user.");
+            throw new BadRequestException("A subscription must belong to a specific user.");
         }
 
         Long userId = request.getUserId();
         User owner = userRepository.findById(java.util.Objects.requireNonNull(userId))
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (request.getBillingCycle() == BillingCycle.CUSTOM && (request.getCustomIntervalDays() == null || request.getCustomIntervalDays() <= 0)) {
+            throw new BadRequestException("Custom interval days are required and must be greater than 0 for CUSTOM billing cycle.");
+        }
 
         Subscription.SubscriptionBuilder builder = Subscription.builder()
                 .serviceName(request.getServiceName())
@@ -54,7 +61,7 @@ public class SubscriptionService {
         if (request.getHouseholdId() != null) {
             Long householdId = request.getHouseholdId();
             Household household = householdRepository.findById(java.util.Objects.requireNonNull(householdId))
-                    .orElseThrow(() -> new RuntimeException("Household not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
             builder.household(household);
         }
 
@@ -71,7 +78,7 @@ public class SubscriptionService {
     @Transactional(readOnly = true)
     public BigDecimal calculateTotalMonthlyCostForUser(@NonNull Long userId) {
         userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         // Fetch ONLY the subscriptions where this user is the payer
         List<Subscription> userSubs = subscriptionRepository.findByUserId(userId);
@@ -104,7 +111,7 @@ public class SubscriptionService {
             case YEARLY -> sub.getAmount().divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
             case CUSTOM -> {
                 if (sub.getCustomIntervalDays() == null || sub.getCustomIntervalDays() <= 0) {
-                    throw new RuntimeException("Invalid custom interval days");
+                    throw new BadRequestException("Invalid custom interval days");
                 }
                 // (Amount / days) * 30 days
                 BigDecimal daily = sub.getAmount().divide(BigDecimal.valueOf(sub.getCustomIntervalDays()), 4, RoundingMode.HALF_UP);
@@ -119,7 +126,7 @@ public class SubscriptionService {
             case QUARTERLY -> lastDate.plusMonths(3);
             case YEARLY -> lastDate.plusYears(1);
             case CUSTOM -> {
-                if (customDays == null) throw new RuntimeException("Custom days required for CUSTOM cycle");
+                if (customDays == null) throw new BadRequestException("Custom days required for CUSTOM cycle");
                 yield lastDate.plusDays(customDays);
             }
         };
@@ -185,15 +192,15 @@ public class SubscriptionService {
     @Transactional
     public SubscriptionResponse confirmManualPayment(@NonNull Long subscriptionId) {
         Subscription sub = subscriptionRepository.findById(subscriptionId)
-                .orElseThrow(() -> new RuntimeException("Subscription not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
         if (sub.getIsAutoPay() != null && sub.getIsAutoPay()) {
-            throw new RuntimeException("Cannot manually confirm an auto-pay subscription");
+            throw new BadRequestException("Cannot manually confirm an auto-pay subscription");
         }
 
         LocalDate today = LocalDate.now();
         if (sub.getNextBillingDate().isAfter(today)) {
-            throw new RuntimeException("Subscription is not due yet");
+            throw new BadRequestException("Subscription is not due yet");
         }
 
         LocalDate historyDate = sub.getNextBillingDate();
@@ -219,7 +226,7 @@ public class SubscriptionService {
     @Transactional
     public SubscriptionResponse toggleAutoPay(@NonNull Long subscriptionId) {
         Subscription sub = subscriptionRepository.findById(subscriptionId)
-                .orElseThrow(() -> new RuntimeException("Subscription not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
         sub.setIsAutoPay(!sub.getIsAutoPay());
 
@@ -243,7 +250,7 @@ public class SubscriptionService {
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getAllSubscriptionsForUser(Long userId) {
         userRepository.findById(java.util.Objects.requireNonNull(userId))
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         return subscriptionRepository.findByUserId(userId).stream()
                 .map(this::convertToResponse)
@@ -254,11 +261,11 @@ public class SubscriptionService {
     @Transactional
     public SubscriptionResponse updateSubscription(Long subscriptionId, SubscriptionRequest request, User loggedInUser) {
         Subscription sub = subscriptionRepository.findById(java.util.Objects.requireNonNull(subscriptionId))
-                .orElseThrow(() -> new RuntimeException("Subscription not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
         // Verify ownership
         if (sub.getUser() == null || !sub.getUser().getId().equals(loggedInUser.getId())) {
-            throw new RuntimeException("Access Denied: You can only update your own subscriptions.");
+            throw new UnauthorizedException("Access Denied: You can only update your own subscriptions.");
         }
 
         if (request.getServiceName() != null && !request.getServiceName().isBlank()) {
@@ -280,10 +287,18 @@ public class SubscriptionService {
             sub.setIsAutoPay(request.getIsAutoPay());
         }
 
+        // VALIDATION: BillingCycle.CUSTOM check
+        BillingCycle effectiveCycle = sub.getBillingCycle();
+        Integer effectiveDays = sub.getCustomIntervalDays();
+
+        if (effectiveCycle == BillingCycle.CUSTOM && (effectiveDays == null || effectiveDays <= 0)) {
+            throw new BadRequestException("Custom interval days are required and must be greater than 0 for CUSTOM billing cycle.");
+        }
+
         // Handle household linking/unlinking
         if (request.getHouseholdId() != null) {
             Household household = householdRepository.findById(java.util.Objects.requireNonNull(request.getHouseholdId()))
-                    .orElseThrow(() -> new RuntimeException("Household not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
             sub.setHousehold(household);
         }
 
@@ -295,11 +310,11 @@ public class SubscriptionService {
     @Transactional
     public void deleteSubscription(Long subscriptionId, User loggedInUser) {
         Subscription sub = subscriptionRepository.findById(java.util.Objects.requireNonNull(subscriptionId))
-                .orElseThrow(() -> new RuntimeException("Subscription not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
         // Verify ownership
         if (sub.getUser() == null || !sub.getUser().getId().equals(loggedInUser.getId())) {
-            throw new RuntimeException("Access Denied: You can only delete your own subscriptions.");
+            throw new UnauthorizedException("Access Denied: You can only delete your own subscriptions.");
         }
 
         subscriptionRepository.delete(sub);
@@ -309,7 +324,7 @@ public class SubscriptionService {
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getSubscriptionsForHousehold(Long householdId) {
         householdRepository.findById(java.util.Objects.requireNonNull(householdId))
-                .orElseThrow(() -> new RuntimeException("Household not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
 
         return subscriptionRepository.findByHouseholdId(householdId).stream()
                 .map(this::convertToResponse)

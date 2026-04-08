@@ -11,6 +11,9 @@ import com.udit.subscriptionmanager.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import com.udit.subscriptionmanager.exception.BadRequestException;
+import com.udit.subscriptionmanager.exception.ResourceNotFoundException;
+import com.udit.subscriptionmanager.exception.UnauthorizedException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -29,11 +32,11 @@ public class HouseholdService {
     @Transactional
     public HouseholdResponse createHousehold(User user, String name) {
         if (user.getHousehold() != null) {
-            throw new RuntimeException("User already belongs to a household. Leave it first before creating a new one.");
+            throw new BadRequestException("User already belongs to a household. Leave it first before creating a new one.");
         }
 
         if (name == null || name.isBlank()) {
-            throw new RuntimeException("Household name is required.");
+            throw new BadRequestException("Household name is required.");
         }
 
         Household household = Household.builder()
@@ -55,11 +58,11 @@ public class HouseholdService {
     @Transactional
     public HouseholdResponse joinHousehold(User user, String inviteCode) {
         if (user.getHousehold() != null) {
-            throw new RuntimeException("User already belongs to a household. Leave it first before joining another.");
+            throw new BadRequestException("User already belongs to a household. Leave it first before joining another.");
         }
 
         Household household = householdRepository.findByInviteCode(inviteCode)
-                .orElseThrow(() -> new RuntimeException("Invalid invite code. No household found."));
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid invite code. No household found."));
 
         user.setHousehold(household);
         userRepository.save(user);
@@ -72,12 +75,12 @@ public class HouseholdService {
     public void leaveHousehold(User user) {
         Household household = user.getHousehold();
         if (household == null) {
-            throw new RuntimeException("User does not belong to any household.");
+            throw new BadRequestException("User does not belong to any household.");
         }
 
         // Admin cannot leave without transferring admin first
         if (household.getAdmin() != null && household.getAdmin().getId().equals(user.getId())) {
-            throw new RuntimeException("You are the admin. Transfer admin role to another member before leaving.");
+            throw new BadRequestException("You are the admin. Transfer admin role to another member before leaving.");
         }
 
         user.setHousehold(null);
@@ -90,18 +93,18 @@ public class HouseholdService {
     public HouseholdResponse transferAdmin(User currentAdmin, Long newAdminId) {
         Household household = currentAdmin.getHousehold();
         if (household == null) {
-            throw new RuntimeException("User does not belong to any household.");
+            throw new BadRequestException("User does not belong to any household.");
         }
 
         if (household.getAdmin() == null || !household.getAdmin().getId().equals(currentAdmin.getId())) {
-            throw new RuntimeException("Only the current admin can transfer admin rights.");
+            throw new UnauthorizedException("Only the current admin can transfer admin rights.");
         }
 
         User newAdmin = userRepository.findById(java.util.Objects.requireNonNull(newAdminId))
-                .orElseThrow(() -> new RuntimeException("User not found."));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found."));
 
         if (newAdmin.getHousehold() == null || newAdmin.getHousehold().getId() != household.getId()) {
-            throw new RuntimeException("The new admin must be a member of this household.");
+            throw new BadRequestException("The new admin must be a member of this household.");
         }
 
         household.setAdmin(newAdmin);
@@ -116,11 +119,11 @@ public class HouseholdService {
     public void deleteHousehold(User admin) {
         Household household = admin.getHousehold();
         if (household == null) {
-            throw new RuntimeException("User does not belong to any household.");
+            throw new BadRequestException("User does not belong to any household.");
         }
 
         if (household.getAdmin() == null || !household.getAdmin().getId().equals(admin.getId())) {
-            throw new RuntimeException("Only the admin can delete the household.");
+            throw new UnauthorizedException("Only the admin can delete the household.");
         }
 
         // Unlink all members from the household
@@ -146,15 +149,15 @@ public class HouseholdService {
     public HouseholdResponse editName(User admin, String newName) {
         Household household = admin.getHousehold();
         if (household == null) {
-            throw new RuntimeException("User does not belong to any household.");
+            throw new BadRequestException("User does not belong to any household.");
         }
 
         if (household.getAdmin() == null || !household.getAdmin().getId().equals(admin.getId())) {
-            throw new RuntimeException("Only the admin can edit the household name.");
+            throw new UnauthorizedException("Only the admin can edit the household name.");
         }
 
         if (newName == null || newName.isBlank()) {
-            throw new RuntimeException("Household name cannot be empty.");
+            throw new BadRequestException("Household name cannot be empty.");
         }
 
         household.setName(newName);
@@ -168,11 +171,11 @@ public class HouseholdService {
     public HouseholdResponse regenerateInviteCode(User admin) {
         Household household = admin.getHousehold();
         if (household == null) {
-            throw new RuntimeException("User does not belong to any household.");
+            throw new BadRequestException("User does not belong to any household.");
         }
 
         if (household.getAdmin() == null || !household.getAdmin().getId().equals(admin.getId())) {
-            throw new RuntimeException("Only the admin can regenerate the invite code.");
+            throw new UnauthorizedException("Only the admin can regenerate the invite code.");
         }
 
         household.setInviteCode(generateInviteCode());
@@ -198,7 +201,7 @@ public class HouseholdService {
     public HouseholdResponse getHouseholdForUser(User user) {
         Household household = user.getHousehold();
         if (household == null) {
-            throw new RuntimeException("User does not belong to any household.");
+            throw new ResourceNotFoundException("User does not belong to any household.");
         }
         return convertToResponse(household);
     }
