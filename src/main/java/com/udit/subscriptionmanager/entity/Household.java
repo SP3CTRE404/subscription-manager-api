@@ -27,6 +27,9 @@ public class Household {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(unique = true)
+    private String inviteCode;
+
     @OneToOne
     @JoinColumn(name = "admin_Id")
     @JsonBackReference

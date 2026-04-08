@@ -1,0 +1,286 @@
+SubTrack: Backend ↔ App Gap
+Analysis
+Category 1: Backend offers, App has NO equivalent or
+plan for
+Only listing items where the app genuinely has no concept, model field, or UI for the feature
+— not items where the logic is simply pending.
+
+1.1
+
+🔴 CUSTOM Billing Cycle — Not in Flutter enum, UI, or Model
+
+Backend BillingCycle enum
+MONTHLY, QUARTERLY, YEARLY, CUSTOM
+
+Flutter BillingCycle enum
+monthly, quarterly, yearly
+
+Warning:
+The backend supports a CUSTOM billing cycle with customIntervalDays. The Flutter BillingCycle
+enum has no custom value, SubscriptionRequest has no customIntervalDays field, and the UI
+has no option for it. Furthermore, the Flutter Subscription response model completely lacks
+a customIntervalDays field. If a user somehow has a CUSTOM subscription created via the
+backend (e.g., every 15 days), the app's fromString() will silently default the enum to monthly
+and completely lose the 15-day interval data because there is no field to store it from the
+JSON.
+
+1.2
+
+🟢 User timeZone — Backend-only concern, no app work needed
+
+Backend User entity
+timeZone (String, default "UTC")
+
+Flutter User model
+Not mapped (intentionally)
+
+Note:
+The timeZone field exists so the backend's NotificationService can deliver due-date reminders
+at a consistent local time (e.g., always 8 PM from the user's perspective), regardless of which
+country they're in. This is entirely a backend responsibility — the server can infer the timezone
+from device locale or registration metadata. No app-side settings or UI are needed for this.
+
+1.3
+
+🟢 User createdAt — Backend-only concern, same as timeZone
+
+Backend User entity
+createdAt (LocalDateTime)
+Note:
+
+Flutter User model
+Not mapped (intentionally)
+
+Similar to timeZone, this is a server-side record-keeping field. The backend tracks when users
+registered for its own internal purposes (e.g., analytics, account management). There is no
+current need to surface this in the app UI.
+
+1.4
+
+🟢 Push Notifications — Planned for later
+
+Backend
+App
+NotificationService.java — full scheduling logic Notification setting toggles exist, but no push
+for upcoming (3-day, 1-day), due-today, and
+notification framework yet
+overdue reminders
+Note:
+The backend already has the notification engine ready (currently logging "EMAIL SIMULATION"
+placeholders). The app has preference toggles for notifications. The actual push notification
+integration (e.g., Firebase Cloud Messaging, device token registration) is planned for a future
+milestone. Once added, the backend's existing scheduling logic will deliver reminders at the
+correct local time using the timeZone field.
+
+Category 2: App needs, Backend does NOT have
+2.1
+
+🔴 Household Management APIs — No HouseholdController
+
+The app has full UI for all of the following, but the backend has no household endpoints:
+App Feature
+Backend
+Create Household (post-registration)
+Only at registration time
+Join Household (invite code / QR)
+Leave Household
+Transfer Admin
+Delete Household
+Edit Household Name
+Generate Invite Code / QR
+Get Household Members
+Get Member's Subscriptions
+
+❌
+❌
+❌
+❌
+❌
+❌
+❌
+❌
+❌
+
+🔴 Subscription Update & Delete — Missing
+
+Caution: Biggest gap. No HouseholdController exists in the backend.
+
+2.2
+
+App Feature
+Edit a subscription
+End/Delete a subscription
+
+Backend
+No PUT /api/subscriptions/{id}
+No DELETE /api/subscriptions/{id}
+
+❌
+❌
+
+2.3
+
+🔴 Get ALL User Subscriptions — Missing
+
+App Feature
+List all subs (not just overdue)
+
+Backend
+No GET /api/subscriptions/user/{userId}
+
+❌
+
+Important:
+The backend only has .../due (overdue only) and .../monthly-total. There is no endpoint to fetch
+all subscriptions for a user.
+
+2.4
+
+🟡 Profile Management APIs — Missing
+
+App Feature
+Update profile (name, phone)
+Change password
+Profile picture upload
+
+2.5
+
+Backend
+No PUT /api/users/profile
+
+❌
+❌
+❌
+
+🟡 phoneNumber field — Not in backend entity
+
+App User model
+phoneNumber (String?)
+
+🟡
+
+Backend User entity
+No column
+
+❌
+
+2.6
+Household Subscriptions — Repo method exists but no
+controller endpoint
+App Feature
+"Household" tab listing household subs
+
+2.7
+
+Backend
+findByHouseholdId() in repo, but not exposed
+via any controller
+
+🔴 householdId / Household object — Not in Flutter User model
+
+Backend User entity
+household (ManyToOne relation)
+
+Flutter User model
+No householdId or household field
+
+❌
+
+Caution:
+While the backend correctly associates a user with a Household (via household_id), the Flutter
+user_model.dart only maps id, email, fullName, and phoneNumber. For the app's "Household"
+tab to function (e.g., fetching members, checking if the user is the admin, or querying
+findByHouseholdId), the Flutter app must know the user's householdId. This needs to be added
+to the Dart model and included in the backend's User DTO responses. Currently the app only
+has instantial data but no logic, to be added later. Need to add a text based householdid thing
+just so user can see it(non editable, auto generated)
+
+Summary
+#
+1
+
+2
+3
+4
+5
+
+6
+7
+
+8
+9
+10
+
+11
+
+Gap
+Direction
+CUSTOM billing
+Backend → App
+cycle not in Flutter
+UI/Enums
+timeZone not in
+Backend → App
+Flutter model
+createdAt not in Backend → App
+Flutter model
+Push notification Backend → App
+framework
+Household
+App → Backend
+controller (all
+CRUD + invite/join)
+Subscription
+App → Backend
+Update & Delete
+Get ALL
+App → Backend
+subscriptions
+endpoint
+Profile update /
+App → Backend
+password change
+phoneNumber in App → Backend
+User entity
+Household subs App → Backend
+controller
+endpoint
+customIntervalDay Backend → App
+s missing from
+Flutter
+Subscription
+
+Severity
+
+🔴
+🟢
+🟢
+🟢
+🔴
+🔴
+🔴
+🟡
+🟡
+🟡
+🔴
+
+Status
+Needs work
+
+Backend-only, no
+app work needed
+Backend-only, no
+app work needed
+Planned for later
+Needs work
+
+Needs work
+Needs work
+
+Needs work
+Needs work
+Needs work
+
+Needs work
+
+

@@ -238,4 +238,81 @@ public class SubscriptionService {
                 .map(this::convertToResponse)
                 .toList();
     }
+
+    // --- Gap 2.3: Get ALL subscriptions for a user (not just overdue) ---
+    @Transactional(readOnly = true)
+    public List<SubscriptionResponse> getAllSubscriptionsForUser(Long userId) {
+        userRepository.findById(java.util.Objects.requireNonNull(userId))
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return subscriptionRepository.findByUserId(userId).stream()
+                .map(this::convertToResponse)
+                .toList();
+    }
+
+    // --- Gap 2.2: Update a subscription ---
+    @Transactional
+    public SubscriptionResponse updateSubscription(Long subscriptionId, SubscriptionRequest request, User loggedInUser) {
+        Subscription sub = subscriptionRepository.findById(java.util.Objects.requireNonNull(subscriptionId))
+                .orElseThrow(() -> new RuntimeException("Subscription not found"));
+
+        // Verify ownership
+        if (sub.getUser() == null || !sub.getUser().getId().equals(loggedInUser.getId())) {
+            throw new RuntimeException("Access Denied: You can only update your own subscriptions.");
+        }
+
+        if (request.getServiceName() != null && !request.getServiceName().isBlank()) {
+            sub.setServiceName(request.getServiceName());
+        }
+        if (request.getAmount() != null) {
+            sub.setAmount(request.getAmount());
+        }
+        if (request.getBillingCycle() != null) {
+            sub.setBillingCycle(request.getBillingCycle());
+        }
+        if (request.getCustomIntervalDays() != null) {
+            sub.setCustomIntervalDays(request.getCustomIntervalDays());
+        }
+        if (request.getNextBillingDate() != null) {
+            sub.setNextBillingDate(request.getNextBillingDate());
+        }
+        if (request.getIsAutoPay() != null) {
+            sub.setIsAutoPay(request.getIsAutoPay());
+        }
+
+        // Handle household linking/unlinking
+        if (request.getHouseholdId() != null) {
+            Household household = householdRepository.findById(java.util.Objects.requireNonNull(request.getHouseholdId()))
+                    .orElseThrow(() -> new RuntimeException("Household not found"));
+            sub.setHousehold(household);
+        }
+
+        Subscription saved = subscriptionRepository.save(sub);
+        return convertToResponse(saved);
+    }
+
+    // --- Gap 2.2: Delete a subscription ---
+    @Transactional
+    public void deleteSubscription(Long subscriptionId, User loggedInUser) {
+        Subscription sub = subscriptionRepository.findById(java.util.Objects.requireNonNull(subscriptionId))
+                .orElseThrow(() -> new RuntimeException("Subscription not found"));
+
+        // Verify ownership
+        if (sub.getUser() == null || !sub.getUser().getId().equals(loggedInUser.getId())) {
+            throw new RuntimeException("Access Denied: You can only delete your own subscriptions.");
+        }
+
+        subscriptionRepository.delete(sub);
+    }
+
+    // --- Gap 2.6: Get all subscriptions for a household ---
+    @Transactional(readOnly = true)
+    public List<SubscriptionResponse> getSubscriptionsForHousehold(Long householdId) {
+        householdRepository.findById(java.util.Objects.requireNonNull(householdId))
+                .orElseThrow(() -> new RuntimeException("Household not found"));
+
+        return subscriptionRepository.findByHouseholdId(householdId).stream()
+                .map(this::convertToResponse)
+                .toList();
+    }
 }

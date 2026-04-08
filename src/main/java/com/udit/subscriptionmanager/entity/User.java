@@ -36,6 +36,8 @@ public class User {
     @Builder.Default
     private String timeZone = "UTC";
 
+    private String phoneNumber;
+
     @ManyToOne
     @JoinColumn(name = "household_id")
     private Household household;

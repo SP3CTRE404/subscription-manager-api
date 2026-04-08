@@ -1,5 +1,6 @@
 package com.udit.subscriptionmanager.service;
 
+import com.udit.subscriptionmanager.dto.ProfileUpdateRequest;
 import com.udit.subscriptionmanager.entity.User;
 import com.udit.subscriptionmanager.entity.Household;
 import com.udit.subscriptionmanager.repository.HouseholdRepository;
@@ -54,6 +55,7 @@ public class UserService {
                     .name(householdName)
                     .createdAt(LocalDateTime.now())
                     .admin(savedUser)
+                    .inviteCode(java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                     .build();
 
             Household savedHousehold = householdRepository.save(java.util.Objects.requireNonNull(household));
@@ -69,5 +71,32 @@ public class UserService {
 
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
+    }
+
+    public Optional<User> findById(Long id) {
+        return userRepository.findById(java.util.Objects.requireNonNull(id));
+    }
+
+    @Transactional
+    public User updateProfile(User user, ProfileUpdateRequest request) {
+        if (request.getFullName() != null && !request.getFullName().isBlank()) {
+            user.setFullName(request.getFullName());
+        }
+        if (request.getPhoneNumber() != null) {
+            user.setPhoneNumber(request.getPhoneNumber());
+        }
+        return userRepository.save(java.util.Objects.requireNonNull(user));
+    }
+
+    @Transactional
+    public void changePassword(User user, String currentPassword, String newPassword) {
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new RuntimeException("Current password is incorrect.");
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new RuntimeException("New password must be at least 6 characters.");
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
     }
 }
