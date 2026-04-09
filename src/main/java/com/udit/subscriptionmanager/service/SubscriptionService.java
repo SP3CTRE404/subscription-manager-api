@@ -81,7 +81,9 @@ public class SubscriptionService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         // Fetch ONLY the subscriptions where this user is the payer
-        List<Subscription> userSubs = subscriptionRepository.findByUserId(userId);
+        List<Subscription> userSubs = subscriptionRepository.findByUserId(userId).stream()
+                .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
+                .toList();
 
         // Sum their monthly equivalents without any split logic
         return userSubs.stream()
@@ -101,6 +103,7 @@ public class SubscriptionService {
                 .ownerName(sub.getUser() != null ? sub.getUser().getFullName() : null)       // Maps the Full Name
                 .ownerEmail(sub.getUser() != null ? sub.getUser().getEmail() : null)
                 .householdName(sub.getHousehold() != null ? sub.getHousehold().getName() : null)
+                .status(sub.getStatus() != null ? sub.getStatus() : "ACTIVE")
                 .build();
     }
 
@@ -138,7 +141,9 @@ public class SubscriptionService {
         log.info("Starting automatic renewal process for expired subscriptions.");
 
         LocalDate today = LocalDate.now();
-        List<Subscription> expiredSubscriptions = subscriptionRepository.findByNextBillingDateBefore(today);
+        List<Subscription> expiredSubscriptions = subscriptionRepository.findByNextBillingDateBefore(today).stream()
+                .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
+                .toList();
 
         int renewalCount = 0;
         for (Subscription sub : expiredSubscriptions) {
@@ -239,6 +244,7 @@ public class SubscriptionService {
         LocalDate today = LocalDate.now();
 
         return subscriptionRepository.findByNextBillingDateBefore(today).stream()
+                .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
                 .filter(sub -> (sub.getUser() != null && sub.getUser().getId().equals(userId)) ||
                         (sub.getHousehold() != null && sub.getHousehold().getAdmin().getId().equals(userId)))
                 .filter(sub -> sub.getIsAutoPay() != null && !sub.getIsAutoPay())
@@ -253,6 +259,7 @@ public class SubscriptionService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         return subscriptionRepository.findByUserId(userId).stream()
+                .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
                 .map(this::convertToResponse)
                 .toList();
     }
@@ -306,7 +313,6 @@ public class SubscriptionService {
         return convertToResponse(saved);
     }
 
-    // --- Gap 2.2: Delete a subscription ---
     @Transactional
     public void deleteSubscription(Long subscriptionId, User loggedInUser) {
         Subscription sub = subscriptionRepository.findById(java.util.Objects.requireNonNull(subscriptionId))
@@ -320,6 +326,36 @@ public class SubscriptionService {
         subscriptionRepository.delete(sub);
     }
 
+    // NEW METHOD: Explicitly Expire a subscription
+    @Transactional
+    public SubscriptionResponse expireSubscription(Long subscriptionId, User loggedInUser) {
+        Subscription sub = subscriptionRepository.findById(java.util.Objects.requireNonNull(subscriptionId))
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+
+        if (sub.getUser() == null || !sub.getUser().getId().equals(loggedInUser.getId())) {
+            throw new UnauthorizedException("Access Denied: You can only expire your own subscriptions.");
+        }
+
+        sub.setStatus("EXPIRED");
+        // Mark exactly when it ended
+        sub.setNextBillingDate(LocalDate.now());
+
+        Subscription saved = subscriptionRepository.save(sub);
+        return convertToResponse(saved);
+    }
+
+    // NEW METHOD: Fetch only Expired Subscriptions for the History Tab
+    @Transactional(readOnly = true)
+    public List<SubscriptionResponse> getExpiredSubscriptionsForUser(Long userId) {
+        userRepository.findById(java.util.Objects.requireNonNull(userId))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        return subscriptionRepository.findByUserId(userId).stream()
+                .filter(sub -> "EXPIRED".equals(sub.getStatus()))
+                .map(this::convertToResponse)
+                .toList();
+    }
+
     // --- Gap 2.6: Get all subscriptions for a household ---
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getSubscriptionsForHousehold(Long householdId) {
@@ -327,6 +363,7 @@ public class SubscriptionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
 
         return subscriptionRepository.findByHouseholdId(householdId).stream()
+                .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
                 .map(this::convertToResponse)
                 .toList();
     }

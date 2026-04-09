@@ -82,6 +82,15 @@ public class SubscriptionController {
         return ResponseEntity.ok(subscriptionService.getDueSubscriptionsForUser(userId));
     }
 
+    // NEW: Fetch expired history
+    @GetMapping("/user/{userId}/expired")
+    public ResponseEntity<List<SubscriptionResponse>> getExpiredSubscriptions(
+            @PathVariable Long userId,
+            Authentication authentication) {
+        verifyUserAccess(userId, authentication);
+        return ResponseEntity.ok(subscriptionService.getExpiredSubscriptionsForUser(userId));
+    }
+
     // --- Gap 2.2: Update a subscription ---
     @PutMapping("/{id}")
     public ResponseEntity<SubscriptionResponse> updateSubscription(
@@ -90,6 +99,15 @@ public class SubscriptionController {
             Authentication authentication) {
         User loggedInUser = getLoggedInUser(authentication);
         return ResponseEntity.ok(subscriptionService.updateSubscription(id, request, loggedInUser));
+    }
+
+    // NEW: Expire a subscription
+    @PutMapping("/{id}/expire")
+    public ResponseEntity<SubscriptionResponse> expireSubscription(
+            @PathVariable Long id,
+            Authentication authentication) {
+        User loggedInUser = getLoggedInUser(authentication);
+        return ResponseEntity.ok(subscriptionService.expireSubscription(id, loggedInUser));
     }
 
     // --- Gap 2.2: Delete a subscription ---

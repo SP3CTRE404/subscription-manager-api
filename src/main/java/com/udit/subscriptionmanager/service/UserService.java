@@ -86,6 +86,9 @@ public class UserService {
         if (request.getPhoneNumber() != null) {
             user.setPhoneNumber(request.getPhoneNumber());
         }
+        if (request.getProfilePicture() != null) {
+            user.setProfilePicture(request.getProfilePicture());
+        }
         return userRepository.save(java.util.Objects.requireNonNull(user));
     }
 

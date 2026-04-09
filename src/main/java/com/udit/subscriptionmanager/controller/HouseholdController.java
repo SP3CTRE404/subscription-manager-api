@@ -92,6 +92,15 @@ public class HouseholdController {
         return ResponseEntity.ok(householdService.regenerateInviteCode(user));
     }
 
+    // --- PUT /api/households/image --- Edit household image (admin only)
+    @PutMapping("/image")
+    public ResponseEntity<HouseholdResponse> updateHouseholdImage(
+            @RequestBody UpdateImageRequest request,
+            Authentication authentication) {
+        User user = getLoggedInUser(authentication);
+        return ResponseEntity.ok(householdService.updateImage(user, request.getImageUrl()));
+    }
+
     // --- GET /api/households/members --- Get household members
     @GetMapping("/members")
     public ResponseEntity<List<MemberResponse>> getMembers(Authentication authentication) {
@@ -147,5 +156,10 @@ public class HouseholdController {
     @Getter @Setter
     public static class EditNameRequest {
         private String name;
+    }
+
+    @Getter @Setter
+    public static class UpdateImageRequest {
+        private String imageUrl;
     }
 }

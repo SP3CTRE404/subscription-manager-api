@@ -168,6 +168,24 @@ public class HouseholdService {
     }
 
     @Transactional
+    public HouseholdResponse updateImage(User admin, String imageUrl) {
+        Household household = admin.getHousehold();
+        if (household == null) {
+            throw new BadRequestException("User does not belong to any household.");
+        }
+
+        if (household.getAdmin() == null || !household.getAdmin().getId().equals(admin.getId())) {
+            throw new UnauthorizedException("Only the admin can edit the household image.");
+        }
+
+        household.setImageUrl(imageUrl);
+        Household saved = householdRepository.save(household);
+
+        log.info("Household image updated by admin '{}'", admin.getEmail());
+        return convertToResponse(saved);
+    }
+
+    @Transactional
     public HouseholdResponse regenerateInviteCode(User admin) {
         Household household = admin.getHousehold();
         if (household == null) {
@@ -223,6 +241,7 @@ public class HouseholdService {
                 .adminId(household.getAdmin() != null ? household.getAdmin().getId() : null)
                 .adminName(household.getAdmin() != null ? household.getAdmin().getFullName() : null)
                 .createdAt(household.getCreatedAt())
+                .imageUrl(household.getImageUrl()) // NEW
                 .members(members)
                 .build();
     }

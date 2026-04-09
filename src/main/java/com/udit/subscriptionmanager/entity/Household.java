@@ -30,6 +30,9 @@ public class Household {
     @Column(unique = true)
     private String inviteCode;
 
+    @Column(columnDefinition = "TEXT")
+    private String imageUrl; // NEW: Field to store household image
+
     @OneToOne
     @JoinColumn(name = "admin_id")
     @JsonBackReference

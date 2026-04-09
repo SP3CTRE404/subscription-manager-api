@@ -17,5 +17,6 @@ public class HouseholdResponse {
     private Long adminId;
     private String adminName;
     private LocalDateTime createdAt;
+    private String imageUrl; // NEW
     private List<MemberResponse> members;
 }

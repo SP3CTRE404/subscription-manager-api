@@ -36,6 +36,10 @@ public class Subscription {
     @Builder.Default
     private Boolean isAutoPay = true;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private String status = "ACTIVE"; // "ACTIVE" or "EXPIRED"
+
     // A subscription can either belong to one user (Solo Subscription)
     // OR it can belong to a household (Shared Subscription);
 

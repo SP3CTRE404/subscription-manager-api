@@ -38,6 +38,9 @@ public class User {
 
     private String phoneNumber;
 
+    @Column(columnDefinition = "TEXT")
+    private String profilePicture;
+
     @ManyToOne
     @JoinColumn(name = "household_id")
     private Household household;

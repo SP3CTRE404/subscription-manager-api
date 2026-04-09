@@ -13,6 +13,7 @@ public class UserResponse {
     private String email;
     private String fullName;
     private String phoneNumber;
+    private String profilePicture;
     private Long householdId;
     private String householdName;
     private boolean householdAdmin;
@@ -23,6 +24,7 @@ public class UserResponse {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .phoneNumber(user.getPhoneNumber())
+                .profilePicture(user.getProfilePicture())
                 .householdId(user.getHousehold() != null ? user.getHousehold().getId() : null)
                 .householdName(user.getHousehold() != null ? user.getHousehold().getName() : null)
                 .householdAdmin(user.getHousehold() != null
