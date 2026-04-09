@@ -1,5 +1,6 @@
 package com.udit.subscriptionmanager.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
@@ -14,7 +15,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class User {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -43,9 +43,19 @@ public class User {
 
     @ManyToOne
     @JoinColumn(name = "household_id")
+    @JsonIgnoreProperties({"members", "admin"})
     private Household household;
 
+
+
+    @JsonProperty("householdAdmin")
+    public boolean isHouseholdAdmin() {
+        return household != null && household.getAdmin() != null && 
+               household.getAdmin().getId().equals(id);
+    }
+
     @PrePersist
+
     protected void onCreate() {
         if (timeZone == null) {
             timeZone = "UTC";

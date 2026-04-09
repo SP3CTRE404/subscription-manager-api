@@ -14,9 +14,10 @@ public class SubscriptionRequest {
     private BillingCycle billingCycle;
     private Integer customIntervalDays;
     
-    // Tell Jackson to expect the full timestamp from Flutter
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
+    // Standard ISO-8601 date format from Flutter: YYYY-MM-DD
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate nextBillingDate;
+
     private Boolean isAutoPay;          // Can specify if this is an auto-renewing sub
     private Long userId;        // The user who owns it
     private Long householdId;   // Optional: The household it belongs to

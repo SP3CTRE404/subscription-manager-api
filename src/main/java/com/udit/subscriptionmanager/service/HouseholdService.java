@@ -205,15 +205,23 @@ public class HouseholdService {
 
     @Transactional(readOnly = true)
     public List<MemberResponse> getMembers(Long householdId) {
+        Household household = householdRepository.findById(householdId)
+                .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
+        Long adminId = household.getAdmin() != null ? household.getAdmin().getId() : null;
+        
         List<User> members = userRepository.findByHouseholdId(householdId);
         return members.stream()
                 .map(m -> MemberResponse.builder()
                         .id(m.getId())
                         .fullName(m.getFullName())
                         .email(m.getEmail())
+                        .role(adminId != null && adminId.equals(m.getId()) ? "ADMIN" : "MEMBER")
+                        .profilePicture(m.getProfilePicture())
                         .build())
+
                 .toList();
     }
+
 
     @Transactional(readOnly = true)
     public HouseholdResponse getHouseholdForUser(User user) {
@@ -231,7 +239,11 @@ public class HouseholdService {
                         .id(m.getId())
                         .fullName(m.getFullName())
                         .email(m.getEmail())
+                        .role(household.getAdmin() != null && household.getAdmin().getId().equals(m.getId()) ? "ADMIN" : "MEMBER")
+                        .profilePicture(m.getProfilePicture())
                         .build())
+
+
                 .toList();
 
         return HouseholdResponse.builder()

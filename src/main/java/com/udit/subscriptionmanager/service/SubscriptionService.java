@@ -35,7 +35,9 @@ public class SubscriptionService {
 
     @Transactional
     public SubscriptionResponse createSubscription(SubscriptionRequest request) {
+        log.info("Creating subscription: {} for user ID: {}", request.getServiceName(), request.getUserId());
         // 1. STRICT ENFORCEMENT: A subscription MUST belong to a specific person
+
         if (request.getUserId() == null) {
             throw new BadRequestException("A subscription must belong to a specific user.");
         }
@@ -57,13 +59,11 @@ public class SubscriptionService {
                 .isAutoPay(request.getIsAutoPay() != null ? request.getIsAutoPay() : Boolean.TRUE)
                 .user(owner); // Assigns the subscription to the payer in the database
 
-        // 2. Optional: Link to household for Admin viewing
-        if (request.getHouseholdId() != null) {
-            Long householdId = request.getHouseholdId();
-            Household household = householdRepository.findById(java.util.Objects.requireNonNull(householdId))
-                    .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
-            builder.household(household);
+        // AUTO-LINK: Always link to the user's household if they have one for visibility
+        if (owner.getHousehold() != null) {
+            builder.household(owner.getHousehold());
         }
+
 
         Subscription subscriptionToSave = builder.build();
         Subscription savedSub = subscriptionRepository.save(java.util.Objects.requireNonNull(subscriptionToSave));
@@ -77,19 +77,21 @@ public class SubscriptionService {
      */
     @Transactional(readOnly = true)
     public BigDecimal calculateTotalMonthlyCostForUser(@NonNull Long userId) {
-        userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // Fetch ONLY the subscriptions where this user is the payer
-        List<Subscription> userSubs = subscriptionRepository.findByUserId(userId).stream()
+        Long householdId = user.getHousehold() != null ? user.getHousehold().getId() : null;
+
+        // Fetch subscriptions where this user is the owner OR which are shared via household
+        List<Subscription> visibleSubs = subscriptionRepository.findByUserIdOrHouseholdId(userId, householdId).stream()
                 .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
                 .toList();
 
-        // Sum their monthly equivalents without any split logic
-        return userSubs.stream()
+        return visibleSubs.stream()
                 .map(this::calculateMonthlyEquivalent)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
+
 
     private SubscriptionResponse convertToResponse(Subscription sub) {
         return SubscriptionResponse.builder()
@@ -103,8 +105,10 @@ public class SubscriptionService {
                 .ownerName(sub.getUser() != null ? sub.getUser().getFullName() : null)       // Maps the Full Name
                 .ownerEmail(sub.getUser() != null ? sub.getUser().getEmail() : null)
                 .householdName(sub.getHousehold() != null ? sub.getHousehold().getName() : null)
+                .householdId(sub.getHousehold() != null ? sub.getHousehold().getId() : null)
                 .status(sub.getStatus() != null ? sub.getStatus() : "ACTIVE")
                 .build();
+
     }
 
     public BigDecimal calculateMonthlyEquivalent(Subscription sub) {
@@ -241,28 +245,51 @@ public class SubscriptionService {
 
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getDueSubscriptionsForUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        List<Subscription> subs;
+        if (user.getHousehold() != null) {
+            subs = subscriptionRepository.findByMemberHouseholdId(user.getHousehold().getId());
+        } else {
+            subs = subscriptionRepository.findByUserId(userId);
+        }
+
         LocalDate today = LocalDate.now();
 
-        return subscriptionRepository.findByNextBillingDateBefore(today).stream()
+        return subs.stream()
                 .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
-                .filter(sub -> (sub.getUser() != null && sub.getUser().getId().equals(userId)) ||
-                        (sub.getHousehold() != null && sub.getHousehold().getAdmin().getId().equals(userId)))
+                .filter(sub -> sub.getNextBillingDate() != null && sub.getNextBillingDate().isBefore(today))
                 .filter(sub -> sub.getIsAutoPay() != null && !sub.getIsAutoPay())
                 .map(this::convertToResponse)
                 .toList();
     }
 
+
+
     // --- Gap 2.3: Get ALL subscriptions for a user (not just overdue) ---
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getAllSubscriptionsForUser(Long userId) {
-        userRepository.findById(java.util.Objects.requireNonNull(userId))
+        User user = userRepository.findById(java.util.Objects.requireNonNull(userId))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        return subscriptionRepository.findByUserId(userId).stream()
+        List<Subscription> subs;
+        if (user.getHousehold() != null) {
+            // Fetch everything belonging to anyone in the household
+            subs = subscriptionRepository.findByMemberHouseholdId(user.getHousehold().getId());
+        } else {
+            // Solo user: only their personal subs
+            subs = subscriptionRepository.findByUserId(userId);
+        }
+
+        return subs.stream()
                 .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
                 .map(this::convertToResponse)
                 .toList();
     }
+
+
+
 
     // --- Gap 2.2: Update a subscription ---
     @Transactional
@@ -270,10 +297,18 @@ public class SubscriptionService {
         Subscription sub = subscriptionRepository.findById(java.util.Objects.requireNonNull(subscriptionId))
                 .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
-        // Verify ownership
-        if (sub.getUser() == null || !sub.getUser().getId().equals(loggedInUser.getId())) {
-            throw new UnauthorizedException("Access Denied: You can only update your own subscriptions.");
+        // Verify ownership OR Household Admin permission
+        boolean isOwner = sub.getUser() != null && sub.getUser().getId().equals(loggedInUser.getId());
+        boolean isAdminOfOwner = loggedInUser.getHousehold() != null && 
+                                 sub.getUser() != null &&
+                                 sub.getUser().getHousehold() != null &&
+                                 loggedInUser.getHousehold().getId() == sub.getUser().getHousehold().getId() &&
+                                 loggedInUser.isHouseholdAdmin();
+
+        if (!isOwner && !isAdminOfOwner) {
+            throw new RuntimeException("Access Denied: You cannot modify this subscription.");
         }
+
 
         if (request.getServiceName() != null && !request.getServiceName().isBlank()) {
             sub.setServiceName(request.getServiceName());
@@ -307,7 +342,11 @@ public class SubscriptionService {
             Household household = householdRepository.findById(java.util.Objects.requireNonNull(request.getHouseholdId()))
                     .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
             sub.setHousehold(household);
+        } else {
+            // Fix: Allow unsharing by setting household to null
+            sub.setHousehold(null);
         }
+
 
         Subscription saved = subscriptionRepository.save(sub);
         return convertToResponse(saved);
@@ -347,24 +386,26 @@ public class SubscriptionService {
     // NEW METHOD: Fetch only Expired Subscriptions for the History Tab
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getExpiredSubscriptionsForUser(Long userId) {
-        userRepository.findById(java.util.Objects.requireNonNull(userId))
+        User user = userRepository.findById(java.util.Objects.requireNonNull(userId))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        return subscriptionRepository.findByUserId(userId).stream()
+        Long householdId = user.getHousehold() != null ? user.getHousehold().getId() : null;
+
+        return subscriptionRepository.findByUserIdOrHouseholdId(userId, householdId).stream()
                 .filter(sub -> "EXPIRED".equals(sub.getStatus()))
                 .map(this::convertToResponse)
                 .toList();
     }
 
+
     // --- Gap 2.6: Get all subscriptions for a household ---
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getSubscriptionsForHousehold(Long householdId) {
-        householdRepository.findById(java.util.Objects.requireNonNull(householdId))
-                .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
-
-        return subscriptionRepository.findByHouseholdId(householdId).stream()
+        return subscriptionRepository.findByMemberHouseholdId(householdId)
+                .stream()
                 .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
                 .map(this::convertToResponse)
                 .toList();
     }
+
 }

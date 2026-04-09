@@ -42,24 +42,46 @@ public class SubscriptionController {
     private void verifyUserAccess(Long requestedUserId, Authentication authentication) {
         User loggedInUser = getLoggedInUser(authentication);
         
-        if (!loggedInUser.getId().equals(requestedUserId)) {
-            throw new RuntimeException("Access Denied: You cannot view or modify another user's data.");
+        // 1. You can always access your own data
+        if (loggedInUser.getId().equals(requestedUserId)) {
+            return;
+        }
+
+        // 2. Household Admin can access data of their household members
+        User targetUser = userService.findById(requestedUserId)
+                .orElseThrow(() -> new RuntimeException("Target user not found"));
+
+        boolean sameHousehold = loggedInUser.getHousehold() != null && 
+                               targetUser.getHousehold() != null &&
+                               loggedInUser.getHousehold().getId() == targetUser.getHousehold().getId();
+
+        
+        boolean isAdmin = loggedInUser.isHouseholdAdmin();
+
+        if (!isAdmin || !sameHousehold) {
+            throw new RuntimeException("Access Denied: You cannot view or modify this user's data.");
         }
     }
+
 
     @PostMapping("/add")
     public ResponseEntity<SubscriptionResponse> addSubscription(
             @RequestBody SubscriptionRequest request, 
             Authentication authentication) {
         
-        // 1. Get the logged-in user's email from the JWT token
         User loggedInUser = getLoggedInUser(authentication);
-                
-        // 2. Manually set the userId in the request payload
-        request.setUserId(loggedInUser.getId());
+        
+        // If userId is missing, default to the logged-in user
+        if (request.getUserId() == null) {
+            request.setUserId(loggedInUser.getId());
+        } else if (!request.getUserId().equals(loggedInUser.getId())) {
+            // If adding for someone else, verify permission
+            verifyUserAccess(request.getUserId(), authentication);
+        }
         
         return ResponseEntity.ok(subscriptionService.createSubscription(request));
     }
+
 
     // --- Gap 2.3: Get ALL subscriptions for a user (not just overdue) ---
     @GetMapping("/user/{userId}")

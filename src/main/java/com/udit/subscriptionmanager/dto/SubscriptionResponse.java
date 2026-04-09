@@ -17,5 +17,7 @@ public class SubscriptionResponse {
     private String ownerName;
     private String ownerEmail;
     private String householdName;
+    private Long householdId;
     private String status;
-}
+}
+
