@@ -56,6 +56,7 @@ public class SubscriptionService {
                 .billingCycle(request.getBillingCycle())
                 .customIntervalDays(request.getCustomIntervalDays())
                 .nextBillingDate(request.getNextBillingDate())
+                .purchaseDate(request.getPurchaseDate())
                 .isAutoPay(request.getIsAutoPay() != null ? request.getIsAutoPay() : Boolean.TRUE)
                 .user(owner); // Assigns the subscription to the payer in the database
 
@@ -81,13 +82,18 @@ public class SubscriptionService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         Long householdId = user.getHousehold() != null ? user.getHousehold().getId() : null;
+        List<Subscription> visibleSubs;
 
-        // Fetch subscriptions where this user is the owner OR which are shared via household
-        List<Subscription> visibleSubs = subscriptionRepository.findByUserIdOrHouseholdId(userId, householdId).stream()
-                .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
-                .toList();
+        if (householdId != null) {
+            // Fetch subscriptions where this user is the owner OR which are shared via household
+            visibleSubs = subscriptionRepository.findByUserIdOrHouseholdId(userId, householdId);
+        } else {
+            // Solo user: only their personal subscriptions
+            visibleSubs = subscriptionRepository.findByUserId(userId);
+        }
 
         return visibleSubs.stream()
+                .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
                 .map(this::calculateMonthlyEquivalent)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
@@ -100,6 +106,8 @@ public class SubscriptionService {
                 .amount(sub.getAmount())
                 .billingCycle(sub.getBillingCycle())
                 .nextBillingDate(sub.getNextBillingDate())
+                .purchaseDate(sub.getPurchaseDate())
+                .customIntervalDays(sub.getCustomIntervalDays())
                 .isAutoPay(sub.getIsAutoPay() != null ? sub.getIsAutoPay() : Boolean.TRUE)
                 .ownerId(sub.getUser() != null ? sub.getUser().getId() : null)               // Maps the ID
                 .ownerName(sub.getUser() != null ? sub.getUser().getFullName() : null)       // Maps the Full Name
@@ -194,7 +202,7 @@ public class SubscriptionService {
     }
 
     @Transactional(readOnly = true)
-    public List<SubscriptionHistory> getHistory(Long subscriptionId) {
+    public List<SubscriptionHistory> getHistory(@NonNull Long subscriptionId) {
         return subscriptionHistoryRepository.findBySubscriptionIdOrderByPaymentDateDesc(subscriptionId);
     }
 
@@ -244,7 +252,7 @@ public class SubscriptionService {
     }
 
     @Transactional(readOnly = true)
-    public List<SubscriptionResponse> getDueSubscriptionsForUser(Long userId) {
+    public List<SubscriptionResponse> getDueSubscriptionsForUser(@NonNull Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -269,8 +277,8 @@ public class SubscriptionService {
 
     // --- Gap 2.3: Get ALL subscriptions for a user (not just overdue) ---
     @Transactional(readOnly = true)
-    public List<SubscriptionResponse> getAllSubscriptionsForUser(Long userId) {
-        User user = userRepository.findById(java.util.Objects.requireNonNull(userId))
+    public List<SubscriptionResponse> getAllSubscriptionsForUser(@NonNull Long userId) {
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         List<Subscription> subs;
@@ -324,6 +332,9 @@ public class SubscriptionService {
         }
         if (request.getNextBillingDate() != null) {
             sub.setNextBillingDate(request.getNextBillingDate());
+        }
+        if (request.getPurchaseDate() != null) {
+            sub.setPurchaseDate(request.getPurchaseDate());
         }
         if (request.getIsAutoPay() != null) {
             sub.setIsAutoPay(request.getIsAutoPay());
@@ -385,13 +396,20 @@ public class SubscriptionService {
 
     // NEW METHOD: Fetch only Expired Subscriptions for the History Tab
     @Transactional(readOnly = true)
-    public List<SubscriptionResponse> getExpiredSubscriptionsForUser(Long userId) {
-        User user = userRepository.findById(java.util.Objects.requireNonNull(userId))
+    public List<SubscriptionResponse> getExpiredSubscriptionsForUser(@NonNull Long userId) {
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         Long householdId = user.getHousehold() != null ? user.getHousehold().getId() : null;
+        List<Subscription> subs;
 
-        return subscriptionRepository.findByUserIdOrHouseholdId(userId, householdId).stream()
+        if (householdId != null) {
+            subs = subscriptionRepository.findByUserIdOrHouseholdId(userId, householdId);
+        } else {
+            subs = subscriptionRepository.findByUserId(userId);
+        }
+
+        return subs.stream()
                 .filter(sub -> "EXPIRED".equals(sub.getStatus()))
                 .map(this::convertToResponse)
                 .toList();
@@ -400,7 +418,7 @@ public class SubscriptionService {
 
     // --- Gap 2.6: Get all subscriptions for a household ---
     @Transactional(readOnly = true)
-    public List<SubscriptionResponse> getSubscriptionsForHousehold(Long householdId) {
+    public List<SubscriptionResponse> getSubscriptionsForHousehold(@NonNull Long householdId) {
         return subscriptionRepository.findByMemberHouseholdId(householdId)
                 .stream()
                 .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))

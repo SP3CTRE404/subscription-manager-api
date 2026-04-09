@@ -18,6 +18,9 @@ public class SubscriptionRequest {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate nextBillingDate;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate purchaseDate;
+
     private Boolean isAutoPay;          // Can specify if this is an auto-renewing sub
     private Long userId;        // The user who owns it
     private Long householdId;   // Optional: The household it belongs to

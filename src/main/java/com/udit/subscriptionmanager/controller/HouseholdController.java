@@ -65,7 +65,7 @@ public class HouseholdController {
             @RequestBody TransferAdminRequest request,
             Authentication authentication) {
         User user = getLoggedInUser(authentication);
-        return ResponseEntity.ok(householdService.transferAdmin(user, request.getNewAdminId()));
+        return ResponseEntity.ok(householdService.transferAdmin(user, java.util.Objects.requireNonNull(request.getNewAdminId())));
     }
 
     // --- DELETE /api/households --- Delete household (admin only)
@@ -108,7 +108,7 @@ public class HouseholdController {
         if (user.getHousehold() == null) {
             throw new RuntimeException("User does not belong to any household.");
         }
-        return ResponseEntity.ok(householdService.getMembers(user.getHousehold().getId()));
+        return ResponseEntity.ok(householdService.getMembers(java.util.Objects.requireNonNull(user.getHousehold().getId())));
     }
 
     // --- GET /api/households/members/{memberId}/subscriptions --- Get a member's subscriptions
@@ -121,12 +121,12 @@ public class HouseholdController {
             throw new RuntimeException("User does not belong to any household.");
         }
         // Verify the target member is in the same household
-        User member = userService.findById(memberId)
+        User member = userService.findById(java.util.Objects.requireNonNull(memberId))
                 .orElseThrow(() -> new RuntimeException("Member not found"));
         if (member.getHousehold() == null || member.getHousehold().getId() != user.getHousehold().getId()) {
             throw new RuntimeException("That user is not in your household.");
         }
-        return ResponseEntity.ok(subscriptionService.getAllSubscriptionsForUser(memberId));
+        return ResponseEntity.ok(subscriptionService.getAllSubscriptionsForUser(java.util.Objects.requireNonNull(memberId)));
     }
 
     // --- GET /api/households/my --- Get current user's household details

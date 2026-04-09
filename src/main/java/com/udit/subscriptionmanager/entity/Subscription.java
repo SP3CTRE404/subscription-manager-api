@@ -31,6 +31,9 @@ public class Subscription {
 
     @Column(nullable = false)
     private LocalDate nextBillingDate;
+
+    @Column(nullable = false, columnDefinition = "DATE DEFAULT CURRENT_DATE")
+    private LocalDate purchaseDate;
     
     @Column(nullable = false, columnDefinition = "boolean default true")
     @Builder.Default

@@ -15,6 +15,7 @@ import com.udit.subscriptionmanager.exception.BadRequestException;
 import com.udit.subscriptionmanager.exception.ResourceNotFoundException;
 import com.udit.subscriptionmanager.exception.UnauthorizedException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.lang.NonNull;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -90,7 +91,7 @@ public class HouseholdService {
     }
 
     @Transactional
-    public HouseholdResponse transferAdmin(User currentAdmin, Long newAdminId) {
+    public HouseholdResponse transferAdmin(User currentAdmin, @NonNull Long newAdminId) {
         Household household = currentAdmin.getHousehold();
         if (household == null) {
             throw new BadRequestException("User does not belong to any household.");
@@ -204,7 +205,7 @@ public class HouseholdService {
     }
 
     @Transactional(readOnly = true)
-    public List<MemberResponse> getMembers(Long householdId) {
+    public List<MemberResponse> getMembers(@NonNull Long householdId) {
         Household household = householdRepository.findById(householdId)
                 .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
         Long adminId = household.getAdmin() != null ? household.getAdmin().getId() : null;

@@ -48,8 +48,8 @@ public class SubscriptionController {
         }
 
         // 2. Household Admin can access data of their household members
-        User targetUser = userService.findById(requestedUserId)
-                .orElseThrow(() -> new RuntimeException("Target user not found"));
+        User targetUser = userService.findById(java.util.Objects.requireNonNull(requestedUserId))
+                .orElseThrow(() -> new RuntimeException("Target user find failure"));
 
         boolean sameHousehold = loggedInUser.getHousehold() != null && 
                                targetUser.getHousehold() != null &&
@@ -89,7 +89,7 @@ public class SubscriptionController {
             @PathVariable Long userId,
             Authentication authentication) {
         verifyUserAccess(userId, authentication);
-        return ResponseEntity.ok(subscriptionService.getAllSubscriptionsForUser(userId));
+        return ResponseEntity.ok(subscriptionService.getAllSubscriptionsForUser(java.util.Objects.requireNonNull(userId)));
     }
 
     @GetMapping("/user/{userId}/monthly-total")
@@ -101,7 +101,7 @@ public class SubscriptionController {
     @GetMapping("/user/{userId}/due")
     public ResponseEntity<List<SubscriptionResponse>> getDueSubscriptions(@PathVariable Long userId, Authentication authentication) {
         verifyUserAccess(userId, authentication);
-        return ResponseEntity.ok(subscriptionService.getDueSubscriptionsForUser(userId));
+        return ResponseEntity.ok(subscriptionService.getDueSubscriptionsForUser(java.util.Objects.requireNonNull(userId)));
     }
 
     // NEW: Fetch expired history
@@ -110,7 +110,7 @@ public class SubscriptionController {
             @PathVariable Long userId,
             Authentication authentication) {
         verifyUserAccess(userId, authentication);
-        return ResponseEntity.ok(subscriptionService.getExpiredSubscriptionsForUser(userId));
+        return ResponseEntity.ok(subscriptionService.getExpiredSubscriptionsForUser(java.util.Objects.requireNonNull(userId)));
     }
 
     // --- Gap 2.2: Update a subscription ---
@@ -152,12 +152,12 @@ public class SubscriptionController {
         if (loggedInUser.getHousehold() == null || loggedInUser.getHousehold().getId() != householdId) {
             throw new RuntimeException("Access Denied: You can only view subscriptions for your own household.");
         }
-        return ResponseEntity.ok(subscriptionService.getSubscriptionsForHousehold(householdId));
+        return ResponseEntity.ok(subscriptionService.getSubscriptionsForHousehold(java.util.Objects.requireNonNull(householdId)));
     }
 
     @GetMapping("/{id}/history")
     public ResponseEntity<List<SubscriptionHistory>> getSubscriptionHistory(@PathVariable Long id) {
-        return ResponseEntity.ok(subscriptionService.getHistory(id));
+        return ResponseEntity.ok(subscriptionService.getHistory(java.util.Objects.requireNonNull(id)));
     }
 
     @PostMapping("/{id}/pay")

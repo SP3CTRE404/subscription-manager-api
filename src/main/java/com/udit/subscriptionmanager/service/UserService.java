@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.lang.NonNull;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -74,8 +75,8 @@ public class UserService {
         return userRepository.findByEmail(email);
     }
 
-    public Optional<User> findById(Long id) {
-        return userRepository.findById(java.util.Objects.requireNonNull(id));
+    public Optional<User> findById(@NonNull Long id) {
+        return userRepository.findById(id);
     }
 
     @Transactional

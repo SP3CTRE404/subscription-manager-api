@@ -12,6 +12,8 @@ public class SubscriptionResponse {
     private BigDecimal amount;
     private BillingCycle billingCycle;
     private LocalDate nextBillingDate;
+    private LocalDate purchaseDate;
+    private Integer customIntervalDays;
     private Boolean isAutoPay;
     private Long ownerId;
     private String ownerName;
