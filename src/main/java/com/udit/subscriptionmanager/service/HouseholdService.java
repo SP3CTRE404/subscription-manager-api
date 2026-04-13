@@ -90,6 +90,7 @@ public class HouseholdService {
 
         user.setHousehold(null);
         userRepository.save(user);
+        entityManager.flush();
 
         log.info("User '{}' left household '{}'", user.getEmail(), household.getName());
     }
