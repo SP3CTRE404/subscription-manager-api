@@ -16,7 +16,8 @@ import java.time.LocalDateTime;
 @Builder
 public class User {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "user_gen")
+    @SequenceGenerator(name = "user_gen", sequenceName = "user_id_seq", initialValue = 200000000, allocationSize = 1)
     private Long id;
 
     @Column(nullable = false, unique = true)
@@ -40,6 +41,9 @@ public class User {
 
     @Column(columnDefinition = "TEXT")
     private String profilePicture;
+
+    @Column
+    private java.time.LocalDate dateOfBirth;
 
     @ManyToOne
     @JoinColumn(name = "household_id")

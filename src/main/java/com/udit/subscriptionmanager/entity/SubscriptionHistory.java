@@ -9,7 +9,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "subscription_history")
+@Table(name = "subscription_history", indexes = {
+    @Index(name = "idx_subscription_history_sub_date", columnList = "subscription_id, paymentDate DESC")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,7 +20,8 @@ import java.time.LocalDateTime;
 public class SubscriptionHistory {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "subscription_history_gen")
+    @SequenceGenerator(name = "subscription_history_gen", sequenceName = "subscription_history_id_seq", initialValue = 500000000, allocationSize = 1)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

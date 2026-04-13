@@ -14,10 +14,12 @@ import com.udit.subscriptionmanager.exception.BadRequestException;
 import com.udit.subscriptionmanager.exception.ResourceNotFoundException;
 import com.udit.subscriptionmanager.exception.UnauthorizedException;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Objects;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import org.springframework.lang.NonNull;
@@ -46,8 +48,10 @@ public class SubscriptionService {
         User owner = userRepository.findById(java.util.Objects.requireNonNull(userId))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if (request.getBillingCycle() == BillingCycle.CUSTOM && (request.getCustomIntervalDays() == null || request.getCustomIntervalDays() <= 0)) {
-            throw new BadRequestException("Custom interval days are required and must be greater than 0 for CUSTOM billing cycle.");
+        if (request.getBillingCycle() == BillingCycle.CUSTOM
+                && (request.getCustomIntervalDays() == null || request.getCustomIntervalDays() <= 0)) {
+            throw new BadRequestException(
+                    "Custom interval days are required and must be greater than 0 for CUSTOM billing cycle.");
         }
 
         Subscription.SubscriptionBuilder builder = Subscription.builder()
@@ -60,11 +64,11 @@ public class SubscriptionService {
                 .isAutoPay(request.getIsAutoPay() != null ? request.getIsAutoPay() : Boolean.TRUE)
                 .user(owner); // Assigns the subscription to the payer in the database
 
-        // AUTO-LINK: Always link to the user's household if they have one for visibility
+        // AUTO-LINK: Always link to the user's household if they have one for
+        // visibility
         if (owner.getHousehold() != null) {
             builder.household(owner.getHousehold());
         }
-
 
         Subscription subscriptionToSave = builder.build();
         Subscription savedSub = subscriptionRepository.save(java.util.Objects.requireNonNull(subscriptionToSave));
@@ -85,7 +89,8 @@ public class SubscriptionService {
         List<Subscription> visibleSubs;
 
         if (householdId != null) {
-            // Fetch subscriptions where this user is the owner OR which are shared via household
+            // Fetch subscriptions where this user is the owner OR which are shared via
+            // household
             visibleSubs = subscriptionRepository.findByUserIdOrHouseholdId(userId, householdId);
         } else {
             // Solo user: only their personal subscriptions
@@ -98,7 +103,6 @@ public class SubscriptionService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-
     private SubscriptionResponse convertToResponse(Subscription sub) {
         return SubscriptionResponse.builder()
                 .id(sub.getId())
@@ -109,12 +113,17 @@ public class SubscriptionService {
                 .purchaseDate(sub.getPurchaseDate())
                 .customIntervalDays(sub.getCustomIntervalDays())
                 .isAutoPay(sub.getIsAutoPay() != null ? sub.getIsAutoPay() : Boolean.TRUE)
-                .ownerId(sub.getUser() != null ? sub.getUser().getId() : null)               // Maps the ID
-                .ownerName(sub.getUser() != null ? sub.getUser().getFullName() : null)       // Maps the Full Name
+                .ownerId(sub.getUser() != null ? sub.getUser().getId() : null) // Maps the ID
+                .ownerName(sub.getUser() != null ? sub.getUser().getFullName() : null) // Maps the Full Name
                 .ownerEmail(sub.getUser() != null ? sub.getUser().getEmail() : null)
                 .householdName(sub.getHousehold() != null ? sub.getHousehold().getName() : null)
                 .householdId(sub.getHousehold() != null ? sub.getHousehold().getId() : null)
                 .status(sub.getStatus() != null ? sub.getStatus() : "ACTIVE")
+                .isOverdue(
+                        Boolean.FALSE.equals(sub.getIsAutoPay()) && sub.getNextBillingDate().isBefore(LocalDate.now()))
+                .isUpcoming(!sub.getNextBillingDate().isBefore(LocalDate.now())
+                        && sub.getNextBillingDate().isBefore(LocalDate.now().plusDays(4)))
+                .daysUntilDue(ChronoUnit.DAYS.between(LocalDate.now(), sub.getNextBillingDate()))
                 .build();
 
     }
@@ -129,7 +138,8 @@ public class SubscriptionService {
                     throw new BadRequestException("Invalid custom interval days");
                 }
                 // (Amount / days) * 30 days
-                BigDecimal daily = sub.getAmount().divide(BigDecimal.valueOf(sub.getCustomIntervalDays()), 4, RoundingMode.HALF_UP);
+                BigDecimal daily = sub.getAmount().divide(BigDecimal.valueOf(sub.getCustomIntervalDays()), 4,
+                        RoundingMode.HALF_UP);
                 yield daily.multiply(BigDecimal.valueOf(30)).setScale(2, RoundingMode.HALF_UP);
             }
         };
@@ -141,7 +151,8 @@ public class SubscriptionService {
             case QUARTERLY -> lastDate.plusMonths(3);
             case YEARLY -> lastDate.plusYears(1);
             case CUSTOM -> {
-                if (customDays == null) throw new BadRequestException("Custom days required for CUSTOM cycle");
+                if (customDays == null)
+                    throw new BadRequestException("Custom days required for CUSTOM cycle");
                 yield lastDate.plusDays(customDays);
             }
         };
@@ -164,7 +175,8 @@ public class SubscriptionService {
                 continue;
             }
 
-            // Skip manual payment subscriptions - they remain "past due" until confirmed by the user.
+            // Skip manual payment subscriptions - they remain "past due" until confirmed by
+            // the user.
             if (sub.getIsAutoPay() != null && !sub.getIsAutoPay()) {
                 continue;
             }
@@ -174,7 +186,8 @@ public class SubscriptionService {
 
             recordHistory(sub, historyDate);
 
-            // Safety measure: if the cycle is very small, and it's far behind, optionally loop until in the future.
+            // Safety measure: if the cycle is very small, and it's far behind, optionally
+            // loop until in the future.
             while (newDate.isBefore(today)) {
                 historyDate = newDate;
                 newDate = calculateNextDate(newDate, sub.getBillingCycle(), sub.getCustomIntervalDays());
@@ -184,7 +197,8 @@ public class SubscriptionService {
             sub.setNextBillingDate(newDate);
             subscriptionRepository.save(sub);
 
-            log.info("Renewed subscription '{}' (ID: {}). New billing date is {}.", sub.getServiceName(), sub.getId(), newDate);
+            log.info("Renewed subscription '{}' (ID: {}). New billing date is {}.", sub.getServiceName(), sub.getId(),
+                    newDate);
             renewalCount++;
         }
 
@@ -235,7 +249,8 @@ public class SubscriptionService {
         sub.setNextBillingDate(newDate);
         Subscription savedSub = subscriptionRepository.save(sub);
 
-        log.info("Manually confirmed payment for subscription '{}' (ID: {}). New billing date is {}.", sub.getServiceName(), sub.getId(), newDate);
+        log.info("Manually confirmed payment for subscription '{}' (ID: {}). New billing date is {}.",
+                sub.getServiceName(), sub.getId(), newDate);
 
         return convertToResponse(savedSub);
     }
@@ -273,8 +288,6 @@ public class SubscriptionService {
                 .toList();
     }
 
-
-
     // --- Gap 2.3: Get ALL subscriptions for a user (not just overdue) ---
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getAllSubscriptionsForUser(@NonNull Long userId) {
@@ -296,27 +309,14 @@ public class SubscriptionService {
                 .toList();
     }
 
-
-
-
     // --- Gap 2.2: Update a subscription ---
     @Transactional
-    public SubscriptionResponse updateSubscription(Long subscriptionId, SubscriptionRequest request, User loggedInUser) {
+    public SubscriptionResponse updateSubscription(Long subscriptionId, SubscriptionRequest request,
+            User loggedInUser) {
         Subscription sub = subscriptionRepository.findById(java.util.Objects.requireNonNull(subscriptionId))
                 .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
-        // Verify ownership OR Household Admin permission
-        boolean isOwner = sub.getUser() != null && sub.getUser().getId().equals(loggedInUser.getId());
-        boolean isAdminOfOwner = loggedInUser.getHousehold() != null && 
-                                 sub.getUser() != null &&
-                                 sub.getUser().getHousehold() != null &&
-                                 loggedInUser.getHousehold().getId() == sub.getUser().getHousehold().getId() &&
-                                 loggedInUser.isHouseholdAdmin();
-
-        if (!isOwner && !isAdminOfOwner) {
-            throw new RuntimeException("Access Denied: You cannot modify this subscription.");
-        }
-
+        checkSubscriptionAccess(sub, loggedInUser, "modify");
 
         if (request.getServiceName() != null && !request.getServiceName().isBlank()) {
             sub.setServiceName(request.getServiceName());
@@ -345,19 +345,20 @@ public class SubscriptionService {
         Integer effectiveDays = sub.getCustomIntervalDays();
 
         if (effectiveCycle == BillingCycle.CUSTOM && (effectiveDays == null || effectiveDays <= 0)) {
-            throw new BadRequestException("Custom interval days are required and must be greater than 0 for CUSTOM billing cycle.");
+            throw new BadRequestException(
+                    "Custom interval days are required and must be greater than 0 for CUSTOM billing cycle.");
         }
 
         // Handle household linking/unlinking
         if (request.getHouseholdId() != null) {
-            Household household = householdRepository.findById(java.util.Objects.requireNonNull(request.getHouseholdId()))
+            Household household = householdRepository
+                    .findById(java.util.Objects.requireNonNull(request.getHouseholdId()))
                     .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
             sub.setHousehold(household);
         } else {
             // Fix: Allow unsharing by setting household to null
             sub.setHousehold(null);
         }
-
 
         Subscription saved = subscriptionRepository.save(sub);
         return convertToResponse(saved);
@@ -368,12 +369,9 @@ public class SubscriptionService {
         Subscription sub = subscriptionRepository.findById(java.util.Objects.requireNonNull(subscriptionId))
                 .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
-        // Verify ownership
-        if (sub.getUser() == null || !sub.getUser().getId().equals(loggedInUser.getId())) {
-            throw new UnauthorizedException("Access Denied: You can only delete your own subscriptions.");
-        }
+        checkSubscriptionAccess(sub, loggedInUser, "delete");
 
-        subscriptionRepository.delete(sub);
+        subscriptionRepository.delete(java.util.Objects.requireNonNull(sub));
     }
 
     // NEW METHOD: Explicitly Expire a subscription
@@ -382,9 +380,7 @@ public class SubscriptionService {
         Subscription sub = subscriptionRepository.findById(java.util.Objects.requireNonNull(subscriptionId))
                 .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
-        if (sub.getUser() == null || !sub.getUser().getId().equals(loggedInUser.getId())) {
-            throw new UnauthorizedException("Access Denied: You can only expire your own subscriptions.");
-        }
+        checkSubscriptionAccess(sub, loggedInUser, "expire");
 
         sub.setStatus("EXPIRED");
         // Mark exactly when it ended
@@ -415,7 +411,6 @@ public class SubscriptionService {
                 .toList();
     }
 
-
     // --- Gap 2.6: Get all subscriptions for a household ---
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getSubscriptionsForHousehold(@NonNull Long householdId) {
@@ -426,4 +421,16 @@ public class SubscriptionService {
                 .toList();
     }
 
+    private void checkSubscriptionAccess(Subscription sub, User loggedInUser, String action) {
+        boolean isOwner = sub.getUser() != null && Objects.equals(sub.getUser().getId(), loggedInUser.getId());
+        boolean isAdminOfOwner = loggedInUser.getHousehold() != null &&
+                sub.getUser() != null &&
+                sub.getUser().getHousehold() != null &&
+                Objects.equals(loggedInUser.getHousehold().getId(), sub.getUser().getHousehold().getId()) &&
+                loggedInUser.isHouseholdAdmin();
+
+        if (!isOwner && !isAdminOfOwner) {
+            throw new UnauthorizedException("Access Denied: You cannot " + action + " this subscription.");
+        }
+    }
 }

@@ -18,8 +18,9 @@ import java.util.List;
 public class Household {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private long id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "household_gen")
+    @SequenceGenerator(name = "household_gen", sequenceName = "household_id_seq", initialValue = 100000000, allocationSize = 1)
+    private Long id;
 
     @Column(nullable = false)
     private String name;

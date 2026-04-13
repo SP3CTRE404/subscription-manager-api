@@ -21,5 +21,8 @@ public class SubscriptionResponse {
     private String householdName;
     private Long householdId;
     private String status;
+    private Boolean isOverdue;
+    private Boolean isUpcoming;
+    private Long daysUntilDue;
 }
 

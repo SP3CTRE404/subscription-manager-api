@@ -16,6 +16,7 @@ import com.udit.subscriptionmanager.exception.ResourceNotFoundException;
 import com.udit.subscriptionmanager.exception.UnauthorizedException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.lang.NonNull;
+import jakarta.persistence.EntityManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,11 +30,13 @@ public class HouseholdService {
     private final HouseholdRepository householdRepository;
     private final UserRepository userRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final EntityManager entityManager;
 
     @Transactional
     public HouseholdResponse createHousehold(User user, String name) {
         if (user.getHousehold() != null) {
-            throw new BadRequestException("User already belongs to a household. Leave it first before creating a new one.");
+            throw new BadRequestException(
+                    "User already belongs to a household. Leave it first before creating a new one.");
         }
 
         if (name == null || name.isBlank()) {
@@ -59,7 +62,8 @@ public class HouseholdService {
     @Transactional
     public HouseholdResponse joinHousehold(User user, String inviteCode) {
         if (user.getHousehold() != null) {
-            throw new BadRequestException("User already belongs to a household. Leave it first before joining another.");
+            throw new BadRequestException(
+                    "User already belongs to a household. Leave it first before joining another.");
         }
 
         Household household = householdRepository.findByInviteCode(inviteCode)
@@ -104,12 +108,23 @@ public class HouseholdService {
         User newAdmin = userRepository.findById(java.util.Objects.requireNonNull(newAdminId))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found."));
 
-        if (newAdmin.getHousehold() == null || newAdmin.getHousehold().getId() != household.getId()) {
+        if (newAdmin.getHousehold() == null || !java.util.Objects.equals(newAdmin.getHousehold().getId(), household.getId())) {
             throw new BadRequestException("The new admin must be a member of this household.");
+        }
+
+        if (newAdmin.getDateOfBirth() != null) {
+            int age = java.time.Period.between(newAdmin.getDateOfBirth(), java.time.LocalDate.now()).getYears();
+            if (age < 18) {
+                throw new BadRequestException("Users under 18 cannot be household administrators.");
+            }
         }
 
         household.setAdmin(newAdmin);
         householdRepository.save(household);
+
+        // Ensure the changes are flushed and the new admin's relationship is refreshed
+        entityManager.flush();
+        entityManager.refresh(newAdmin);
 
         log.info("Admin of household '{}' transferred from '{}' to '{}'",
                 household.getName(), currentAdmin.getEmail(), newAdmin.getEmail());
@@ -144,6 +159,35 @@ public class HouseholdService {
         householdRepository.delete(household);
 
         log.info("Household '{}' deleted by admin '{}'", household.getName(), admin.getEmail());
+    }
+
+    @Transactional
+    public void removeMember(User admin, @NonNull Long memberId) {
+        Household household = admin.getHousehold();
+        if (household == null) {
+            throw new BadRequestException("User does not belong to any household.");
+        }
+
+        if (household.getAdmin() == null || !household.getAdmin().getId().equals(admin.getId())) {
+            throw new UnauthorizedException("Only the admin can remove members.");
+        }
+
+        if (admin.getId().equals(memberId)) {
+            throw new BadRequestException("You cannot remove yourself. Use the Leave or Delete flow instead.");
+        }
+
+        User member = userRepository.findById(java.util.Objects.requireNonNull(memberId))
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found."));
+
+        if (member.getHousehold() == null || !java.util.Objects.equals(member.getHousehold().getId(), household.getId())) {
+            throw new BadRequestException("This user is not a member of your household.");
+        }
+
+        member.setHousehold(null);
+        userRepository.save(member);
+
+        log.info("Member '{}' removed from household '{}' by admin '{}'",
+                member.getEmail(), household.getName(), admin.getEmail());
     }
 
     @Transactional
@@ -209,7 +253,7 @@ public class HouseholdService {
         Household household = householdRepository.findById(householdId)
                 .orElseThrow(() -> new ResourceNotFoundException("Household not found"));
         Long adminId = household.getAdmin() != null ? household.getAdmin().getId() : null;
-        
+
         List<User> members = userRepository.findByHouseholdId(householdId);
         return members.stream()
                 .map(m -> MemberResponse.builder()
@@ -218,11 +262,11 @@ public class HouseholdService {
                         .email(m.getEmail())
                         .role(adminId != null && adminId.equals(m.getId()) ? "ADMIN" : "MEMBER")
                         .profilePicture(m.getProfilePicture())
+                        .dateOfBirth(m.getDateOfBirth())
                         .build())
 
                 .toList();
     }
-
 
     @Transactional(readOnly = true)
     public HouseholdResponse getHouseholdForUser(User user) {
@@ -240,10 +284,11 @@ public class HouseholdService {
                         .id(m.getId())
                         .fullName(m.getFullName())
                         .email(m.getEmail())
-                        .role(household.getAdmin() != null && household.getAdmin().getId().equals(m.getId()) ? "ADMIN" : "MEMBER")
+                        .role(household.getAdmin() != null && household.getAdmin().getId().equals(m.getId()) ? "ADMIN"
+                                : "MEMBER")
                         .profilePicture(m.getProfilePicture())
+                        .dateOfBirth(m.getDateOfBirth())
                         .build())
-
 
                 .toList();
 

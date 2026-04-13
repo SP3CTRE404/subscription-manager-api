@@ -129,6 +129,16 @@ public class HouseholdController {
         return ResponseEntity.ok(subscriptionService.getAllSubscriptionsForUser(java.util.Objects.requireNonNull(memberId)));
     }
 
+    // --- DELETE /api/households/members/{memberId} --- Remove a member (admin only)
+    @DeleteMapping("/members/{memberId}")
+    public ResponseEntity<Map<String, String>> removeMember(
+            @PathVariable Long memberId,
+            Authentication authentication) {
+        User user = getLoggedInUser(authentication);
+        householdService.removeMember(user, java.util.Objects.requireNonNull(memberId));
+        return ResponseEntity.ok(Map.of("message", "Member removed successfully."));
+    }
+
     // --- GET /api/households/my --- Get current user's household details
     @GetMapping("/my")
     public ResponseEntity<HouseholdResponse> getMyHousehold(Authentication authentication) {

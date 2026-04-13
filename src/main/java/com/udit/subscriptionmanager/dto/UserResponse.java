@@ -17,6 +17,7 @@ public class UserResponse {
     private Long householdId;
     private String householdName;
     private boolean householdAdmin;
+    private java.time.LocalDate dateOfBirth;
 
     public static UserResponse fromUser(User user) {
         return UserResponse.builder()
@@ -30,6 +31,7 @@ public class UserResponse {
                 .householdAdmin(user.getHousehold() != null
                         && user.getHousehold().getAdmin() != null
                         && user.getHousehold().getAdmin().getId().equals(user.getId()))
+                .dateOfBirth(user.getDateOfBirth())
                 .build();
     }
 }

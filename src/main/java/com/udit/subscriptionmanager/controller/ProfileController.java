@@ -1,6 +1,7 @@
 package com.udit.subscriptionmanager.controller;
 
 import com.udit.subscriptionmanager.dto.ChangePasswordRequest;
+import com.udit.subscriptionmanager.dto.PasswordResetRequest;
 import com.udit.subscriptionmanager.dto.ProfileUpdateRequest;
 import com.udit.subscriptionmanager.dto.UserResponse;
 import com.udit.subscriptionmanager.entity.User;
@@ -51,5 +52,23 @@ public class ProfileController {
         User user = getLoggedInUser(authentication);
         userService.changePassword(user, request.getCurrentPassword(), request.getNewPassword());
         return ResponseEntity.ok(Map.of("message", "Password changed successfully."));
+    }
+
+    // --- PUT /api/users/reset-password --- Reset password (after biometric verification)
+    @PutMapping("/reset-password")
+    public ResponseEntity<Map<String, String>> resetPassword(
+            @RequestBody PasswordResetRequest request,
+            Authentication authentication) {
+        User user = getLoggedInUser(authentication);
+        userService.resetPassword(user, request.getNewPassword());
+        return ResponseEntity.ok(Map.of("message", "Password has been reset successfully."));
+    }
+
+    // --- DELETE /api/users/profile --- Delete user account entirely
+    @DeleteMapping("/profile")
+    public ResponseEntity<Map<String, String>> deleteProfile(Authentication authentication) {
+        User user = getLoggedInUser(authentication);
+        userService.deleteUser(user);
+        return ResponseEntity.ok(Map.of("message", "Account deleted successfully."));
     }
 }

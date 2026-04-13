@@ -44,6 +44,7 @@ public class UserController {
                 request.getEmail(),
                 request.getPassword(),
                 request.getFullName(),
+                request.getDateOfBirth(),
                 request.isCreateHousehold(),
                 request.getHouseholdName()
         );
@@ -73,7 +74,7 @@ public class UserController {
         private String email;
         private String password;
         private String fullName;
-
+        private java.time.LocalDate dateOfBirth;
         private boolean createHousehold;
         private String householdName;
 

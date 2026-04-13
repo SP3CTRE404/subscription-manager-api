@@ -13,6 +13,7 @@ public class MemberResponse {
     private String email;
     private String role;
     private String profilePicture;
+    private java.time.LocalDate dateOfBirth;
 }
 
 
