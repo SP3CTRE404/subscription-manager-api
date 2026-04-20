@@ -6,7 +6,8 @@ public enum BillingCycle {
     MONTHLY,
     QUARTERLY,
     YEARLY,
-    CUSTOM;
+    CUSTOM,
+    ONE_TIME;
 
     // This tells Spring Boot to accept lowercase, uppercase, or mixed case strings
     @JsonCreator

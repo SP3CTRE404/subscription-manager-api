@@ -25,6 +25,8 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
     @Query("SELECT s FROM Subscription s WHERE s.user.household.id = :householdId")
     List<Subscription> findByMemberHouseholdId(@Param("householdId") Long householdId);
 
+    List<Subscription> findByStatusAndBillingCycleAndPurchaseDateBefore(String status, com.udit.subscriptionmanager.entity.BillingCycle cycle, LocalDate date);
+
     List<Subscription> findByNextBillingDateBefore(LocalDate date);
     List<Subscription> findByNextBillingDate(LocalDate date);
 }

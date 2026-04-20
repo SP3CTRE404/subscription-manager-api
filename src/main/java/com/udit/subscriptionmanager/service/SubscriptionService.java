@@ -54,13 +54,27 @@ public class SubscriptionService {
                     "Custom interval days are required and must be greater than 0 for CUSTOM billing cycle.");
         }
 
+        LocalDate initialNextDate = calculateInitialNextBillingDate(
+                request.getPurchaseDate(),
+                request.getBillingCycle(),
+                request.getCustomIntervalDays(),
+                request.getCustomIntervalUnit()
+        );
+
+        String initialStatus = "ACTIVE";
+        if (request.getBillingCycle() == BillingCycle.ONE_TIME && request.getPurchaseDate().isBefore(LocalDate.now())) {
+            initialStatus = "EXPIRED";
+        }
+
         Subscription.SubscriptionBuilder builder = Subscription.builder()
                 .serviceName(request.getServiceName())
                 .amount(request.getAmount())
                 .billingCycle(request.getBillingCycle())
                 .customIntervalDays(request.getCustomIntervalDays())
-                .nextBillingDate(request.getNextBillingDate())
+                .customIntervalUnit(request.getCustomIntervalUnit())
+                .nextBillingDate(initialNextDate)
                 .purchaseDate(request.getPurchaseDate())
+                .status(initialStatus)
                 .isAutoPay(request.getIsAutoPay() != null ? request.getIsAutoPay() : Boolean.TRUE)
                 .user(owner); // Assigns the subscription to the payer in the database
 
@@ -112,6 +126,7 @@ public class SubscriptionService {
                 .nextBillingDate(sub.getNextBillingDate())
                 .purchaseDate(sub.getPurchaseDate())
                 .customIntervalDays(sub.getCustomIntervalDays())
+                .customIntervalUnit(sub.getCustomIntervalUnit())
                 .isAutoPay(sub.getIsAutoPay() != null ? sub.getIsAutoPay() : Boolean.TRUE)
                 .ownerId(sub.getUser() != null ? sub.getUser().getId() : null) // Maps the ID
                 .ownerName(sub.getUser() != null ? sub.getUser().getFullName() : null) // Maps the Full Name
@@ -120,10 +135,10 @@ public class SubscriptionService {
                 .householdId(sub.getHousehold() != null ? sub.getHousehold().getId() : null)
                 .status(sub.getStatus() != null ? sub.getStatus() : "ACTIVE")
                 .isOverdue(
-                        Boolean.FALSE.equals(sub.getIsAutoPay()) && sub.getNextBillingDate().isBefore(LocalDate.now()))
-                .isUpcoming(!sub.getNextBillingDate().isBefore(LocalDate.now())
+                        sub.getNextBillingDate() != null && Boolean.FALSE.equals(sub.getIsAutoPay()) && sub.getNextBillingDate().isBefore(LocalDate.now()))
+                .isUpcoming(sub.getNextBillingDate() != null && !sub.getNextBillingDate().isBefore(LocalDate.now())
                         && sub.getNextBillingDate().isBefore(LocalDate.now().plusDays(4)))
-                .daysUntilDue(ChronoUnit.DAYS.between(LocalDate.now(), sub.getNextBillingDate()))
+                .daysUntilDue(sub.getNextBillingDate() != null ? ChronoUnit.DAYS.between(LocalDate.now(), sub.getNextBillingDate()) : 0L)
                 .build();
 
     }
@@ -133,29 +148,67 @@ public class SubscriptionService {
             case MONTHLY -> sub.getAmount();
             case QUARTERLY -> sub.getAmount().divide(BigDecimal.valueOf(3), 2, RoundingMode.HALF_UP);
             case YEARLY -> sub.getAmount().divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
+            case ONE_TIME -> sub.getAmount();
             case CUSTOM -> {
                 if (sub.getCustomIntervalDays() == null || sub.getCustomIntervalDays() <= 0) {
-                    throw new BadRequestException("Invalid custom interval days");
+                    throw new BadRequestException("Invalid custom interval value");
                 }
-                // (Amount / days) * 30 days
-                BigDecimal daily = sub.getAmount().divide(BigDecimal.valueOf(sub.getCustomIntervalDays()), 4,
-                        RoundingMode.HALF_UP);
-                yield daily.multiply(BigDecimal.valueOf(30)).setScale(2, RoundingMode.HALF_UP);
+                CustomIntervalUnit unit = sub.getCustomIntervalUnit() != null ? sub.getCustomIntervalUnit() : CustomIntervalUnit.DAYS;
+                yield switch (unit) {
+                    case DAYS -> sub.getAmount()
+                            .divide(BigDecimal.valueOf(sub.getCustomIntervalDays()), 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(30))
+                            .setScale(2, RoundingMode.HALF_UP);
+                    case MONTHS -> sub.getAmount()
+                            .divide(BigDecimal.valueOf(sub.getCustomIntervalDays()), 2, RoundingMode.HALF_UP);
+                    case YEARS -> sub.getAmount()
+                            .divide(BigDecimal.valueOf(sub.getCustomIntervalDays() * 12L), 2, RoundingMode.HALF_UP);
+                };
             }
         };
     }
 
-    public LocalDate calculateNextDate(LocalDate lastDate, BillingCycle cycle, Integer customDays) {
+    public LocalDate calculateNextDate(LocalDate lastDate, BillingCycle cycle, Integer customVal, CustomIntervalUnit unit) {
         return switch (cycle) {
             case MONTHLY -> lastDate.plusMonths(1);
             case QUARTERLY -> lastDate.plusMonths(3);
             case YEARLY -> lastDate.plusYears(1);
             case CUSTOM -> {
-                if (customDays == null)
-                    throw new BadRequestException("Custom days required for CUSTOM cycle");
-                yield lastDate.plusDays(customDays);
+                if (customVal == null)
+                    throw new BadRequestException("Custom interval value required for CUSTOM cycle");
+                if (unit == null || unit == CustomIntervalUnit.DAYS) {
+                    yield lastDate.plusDays(customVal);
+                } else if (unit == CustomIntervalUnit.MONTHS) {
+                    yield lastDate.plusMonths(customVal);
+                } else {
+                    yield lastDate.plusYears(customVal);
+                }
             }
+            case ONE_TIME -> null;
         };
+    }
+
+    private LocalDate calculateInitialNextBillingDate(LocalDate purchaseDate, BillingCycle cycle, Integer customVal, CustomIntervalUnit unit) {
+        if (cycle == BillingCycle.ONE_TIME) {
+            return null;
+        }
+        LocalDate nextDate = calculateNextDate(purchaseDate, cycle, customVal, unit);
+        LocalDate today = LocalDate.now();
+
+        // If the first billing date is already in the future, use it
+        if (!nextDate.isBefore(today)) {
+            return nextDate;
+        }
+
+        // Find the most recent past billing date (so manual payments show as overdue)
+        while (true) {
+            LocalDate following = calculateNextDate(nextDate, cycle, customVal, unit);
+            if (!following.isBefore(today)) {
+                // nextDate is the most recent past date — return it
+                return nextDate;
+            }
+            nextDate = following;
+        }
     }
 
     @Scheduled(cron = "0 0 1 * * ?")
@@ -164,6 +217,16 @@ public class SubscriptionService {
         log.info("Starting automatic renewal process for expired subscriptions.");
 
         LocalDate today = LocalDate.now();
+
+        // 1. Expire ONE_TIME subscriptions 1 day after their purchase date
+        List<Subscription> oneTimeToExpire = subscriptionRepository.findByStatusAndBillingCycleAndPurchaseDateBefore("ACTIVE", BillingCycle.ONE_TIME, today);
+        for (Subscription sub : oneTimeToExpire) {
+            sub.setStatus("EXPIRED");
+            subscriptionRepository.save(sub);
+            log.info("Expired ONE_TIME subscription '{}' (ID: {}).", sub.getServiceName(), sub.getId());
+        }
+
+        // 2. Process automatic renewals for recurring subscriptions
         List<Subscription> expiredSubscriptions = subscriptionRepository.findByNextBillingDateBefore(today).stream()
                 .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
                 .toList();
@@ -182,7 +245,7 @@ public class SubscriptionService {
             }
 
             LocalDate historyDate = sub.getNextBillingDate();
-            LocalDate newDate = calculateNextDate(historyDate, sub.getBillingCycle(), sub.getCustomIntervalDays());
+            LocalDate newDate = calculateNextDate(historyDate, sub.getBillingCycle(), sub.getCustomIntervalDays(), sub.getCustomIntervalUnit());
 
             recordHistory(sub, historyDate);
 
@@ -190,7 +253,7 @@ public class SubscriptionService {
             // loop until in the future.
             while (newDate.isBefore(today)) {
                 historyDate = newDate;
-                newDate = calculateNextDate(newDate, sub.getBillingCycle(), sub.getCustomIntervalDays());
+                newDate = calculateNextDate(newDate, sub.getBillingCycle(), sub.getCustomIntervalDays(), sub.getCustomIntervalUnit());
                 recordHistory(sub, historyDate);
             }
 
@@ -230,19 +293,23 @@ public class SubscriptionService {
         }
 
         LocalDate today = LocalDate.now();
-        if (sub.getNextBillingDate().isAfter(today)) {
-            throw new BadRequestException("Subscription is not due yet");
-        }
 
-        LocalDate historyDate = sub.getNextBillingDate();
-        LocalDate newDate = calculateNextDate(historyDate, sub.getBillingCycle(), sub.getCustomIntervalDays());
+        LocalDate historyDate = sub.getNextBillingDate() != null ? sub.getNextBillingDate() : sub.getPurchaseDate();
+        LocalDate newDate = calculateNextDate(historyDate, sub.getBillingCycle(), sub.getCustomIntervalDays(), sub.getCustomIntervalUnit());
 
         recordHistory(sub, historyDate);
 
+        if (sub.getBillingCycle() == BillingCycle.ONE_TIME) {
+            sub.setNextBillingDate(null);
+            sub.setStatus("EXPIRED");
+            Subscription savedSub = subscriptionRepository.save(sub);
+            return convertToResponse(savedSub);
+        }
+
         // Loop forward if they missed multiple payments
-        while (newDate.isBefore(today)) {
+        while (newDate != null && newDate.isBefore(today)) {
             historyDate = newDate;
-            newDate = calculateNextDate(newDate, sub.getBillingCycle(), sub.getCustomIntervalDays());
+            newDate = calculateNextDate(newDate, sub.getBillingCycle(), sub.getCustomIntervalDays(), sub.getCustomIntervalUnit());
             recordHistory(sub, historyDate);
         }
 
@@ -330,14 +397,30 @@ public class SubscriptionService {
         if (request.getCustomIntervalDays() != null) {
             sub.setCustomIntervalDays(request.getCustomIntervalDays());
         }
-        if (request.getNextBillingDate() != null) {
-            sub.setNextBillingDate(request.getNextBillingDate());
+        if (request.getCustomIntervalUnit() != null) {
+            sub.setCustomIntervalUnit(request.getCustomIntervalUnit());
         }
         if (request.getPurchaseDate() != null) {
             sub.setPurchaseDate(request.getPurchaseDate());
         }
         if (request.getIsAutoPay() != null) {
             sub.setIsAutoPay(request.getIsAutoPay());
+        }
+
+        // RECALCULATE: If cycle or purchase date changed, and nextBillingDate wasn't explicitly provided, recalculate it.
+        if (request.getNextBillingDate() == null && 
+           (request.getBillingCycle() != null || request.getPurchaseDate() != null || 
+            request.getCustomIntervalDays() != null || request.getCustomIntervalUnit() != null)) {
+            
+            LocalDate recalculated = calculateInitialNextBillingDate(
+                sub.getPurchaseDate(),
+                sub.getBillingCycle(),
+                sub.getCustomIntervalDays(),
+                sub.getCustomIntervalUnit()
+            );
+            sub.setNextBillingDate(recalculated);
+        } else if (request.getNextBillingDate() != null) {
+            sub.setNextBillingDate(request.getNextBillingDate());
         }
 
         // VALIDATION: BillingCycle.CUSTOM check

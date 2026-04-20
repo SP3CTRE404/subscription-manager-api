@@ -13,6 +13,7 @@ public class SubscriptionRequest {
     private BigDecimal amount;
     private BillingCycle billingCycle;
     private Integer customIntervalDays;
+    private com.udit.subscriptionmanager.entity.CustomIntervalUnit customIntervalUnit;
     
     // Standard ISO-8601 date format from Flutter: YYYY-MM-DD
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")

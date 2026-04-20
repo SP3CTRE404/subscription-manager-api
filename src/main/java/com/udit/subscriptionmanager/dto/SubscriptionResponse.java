@@ -14,6 +14,7 @@ public class SubscriptionResponse {
     private LocalDate nextBillingDate;
     private LocalDate purchaseDate;
     private Integer customIntervalDays;
+    private com.udit.subscriptionmanager.entity.CustomIntervalUnit customIntervalUnit;
     private Boolean isAutoPay;
     private Long ownerId;
     private String ownerName;

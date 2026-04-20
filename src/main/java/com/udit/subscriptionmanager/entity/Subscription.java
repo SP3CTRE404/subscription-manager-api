@@ -30,7 +30,10 @@ public class Subscription {
     // Only used if billingCycle == CUSTOM
     private Integer customIntervalDays;
 
-    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private CustomIntervalUnit customIntervalUnit;
+
+    @Column(nullable = true)
     private LocalDate nextBillingDate;
 
     @Column(nullable = false, columnDefinition = "DATE DEFAULT CURRENT_DATE")
