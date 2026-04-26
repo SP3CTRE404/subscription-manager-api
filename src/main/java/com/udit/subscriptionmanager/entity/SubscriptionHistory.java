@@ -38,4 +38,13 @@ public class SubscriptionHistory {
     @Column(nullable = false)
     private LocalDateTime recordedAt;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("serviceName")
+    public String getServiceName() {
+        return subscription != null ? subscription.getServiceName() : "Unknown Service";
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("subscriptionId")
+    public Long getSubscriptionId() {
+        return subscription != null ? subscription.getId() : null;
+    }
 }

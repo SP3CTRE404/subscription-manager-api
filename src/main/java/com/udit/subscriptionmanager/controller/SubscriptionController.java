@@ -113,6 +113,33 @@ public class SubscriptionController {
         return ResponseEntity.ok(subscriptionService.getExpiredSubscriptionsForUser(java.util.Objects.requireNonNull(userId)));
     }
 
+    @GetMapping("/user/{userId}/history")
+    public ResponseEntity<Map<String, Object>> getUserHistory(
+            @PathVariable Long userId,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "0") int page,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
+        verifyUserAccess(userId, authentication);
+        List<SubscriptionHistory> allHistory = subscriptionService.getUserHistory(java.util.Objects.requireNonNull(userId));
+        
+        // Manual pagination over the full list
+        int fromIndex = page * size;
+        int toIndex = Math.min(fromIndex + size, allHistory.size());
+        
+        List<SubscriptionHistory> pageContent = (fromIndex < allHistory.size()) 
+                ? allHistory.subList(fromIndex, toIndex) 
+                : List.of();
+        
+        Map<String, Object> response = Map.of(
+                "content", pageContent,
+                "page", page,
+                "size", size,
+                "totalElements", allHistory.size(),
+                "hasMore", toIndex < allHistory.size()
+        );
+        return ResponseEntity.ok(response);
+    }
+
     // --- Gap 2.2: Update a subscription ---
     @PutMapping("/{id}")
     public ResponseEntity<SubscriptionResponse> updateSubscription(

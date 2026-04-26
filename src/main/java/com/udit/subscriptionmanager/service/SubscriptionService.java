@@ -280,7 +280,12 @@ public class SubscriptionService {
 
     @Transactional(readOnly = true)
     public List<SubscriptionHistory> getHistory(@NonNull Long subscriptionId) {
-        return subscriptionHistoryRepository.findBySubscriptionIdOrderByPaymentDateDesc(subscriptionId);
+        return subscriptionHistoryRepository.findBySubscription_IdOrderByPaymentDateDesc(subscriptionId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SubscriptionHistory> getUserHistory(@NonNull Long userId) {
+        return subscriptionHistoryRepository.findBySubscriptionUserIdOrderByPaymentDateDesc(userId);
     }
 
     @Transactional
@@ -476,17 +481,7 @@ public class SubscriptionService {
     // NEW METHOD: Fetch only Expired Subscriptions for the History Tab
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getExpiredSubscriptionsForUser(@NonNull Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        Long householdId = user.getHousehold() != null ? user.getHousehold().getId() : null;
-        List<Subscription> subs;
-
-        if (householdId != null) {
-            subs = subscriptionRepository.findByUserIdOrHouseholdId(userId, householdId);
-        } else {
-            subs = subscriptionRepository.findByUserId(userId);
-        }
+        List<Subscription> subs = subscriptionRepository.findByUserId(userId);
 
         return subs.stream()
                 .filter(sub -> "EXPIRED".equals(sub.getStatus()))
