@@ -37,6 +37,10 @@ public class User {
     @Builder.Default
     private String timeZone = "UTC";
 
+    @Column(nullable = false)
+    @Builder.Default
+    private String currencySymbol = "₹";
+
     private String phoneNumber;
 
     @Column(columnDefinition = "TEXT")
@@ -59,10 +63,12 @@ public class User {
     }
 
     @PrePersist
-
-    protected void onCreate() {
+    public void prePersist() {
         if (timeZone == null) {
             timeZone = "UTC";
+        }
+        if (currencySymbol == null) {
+            currencySymbol = "₹";
         }
     }
 

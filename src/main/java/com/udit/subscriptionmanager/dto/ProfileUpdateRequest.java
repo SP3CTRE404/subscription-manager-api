@@ -9,4 +9,5 @@ public class ProfileUpdateRequest {
     private String fullName;
     private String phoneNumber;
     private String profilePicture;
+    private String currencySymbol;
 }

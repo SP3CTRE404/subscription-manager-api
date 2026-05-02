@@ -118,6 +118,24 @@ public class SubscriptionService {
     }
 
     private SubscriptionResponse convertToResponse(Subscription sub) {
+        long days = (sub.getNextBillingDate() != null)
+                ? java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), sub.getNextBillingDate())
+                : 0;
+
+        boolean isManual = Boolean.FALSE.equals(sub.getIsAutoPay());
+
+        // Rule: 3 days consecutively before (Manual) or 1 day before (Auto)
+        // Manual now includes 'due today' (days == 0) to ensure it appears in Action Needed
+        boolean upcomingManual = isManual && (days >= 0 && days <= 3);
+        boolean upcomingAuto = !isManual && (days == 1);
+        boolean isUpcoming = upcomingManual || upcomingAuto;
+
+        // Rule: Everyday that it is overdue (Manual only)
+        boolean isOverdue = isManual && days < 0;
+
+        // Rule: Day of payment (Auto-pay renewed notification)
+        boolean isRenewedToday = !isManual && days == 0;
+
         return SubscriptionResponse.builder()
                 .id(sub.getId())
                 .serviceName(sub.getServiceName())
@@ -133,14 +151,12 @@ public class SubscriptionService {
                 .ownerEmail(sub.getUser() != null ? sub.getUser().getEmail() : null)
                 .householdName(sub.getHousehold() != null ? sub.getHousehold().getName() : null)
                 .householdId(sub.getHousehold() != null ? sub.getHousehold().getId() : null)
-                .status(sub.getStatus() != null ? sub.getStatus() : "ACTIVE")
-                .isOverdue(
-                        sub.getNextBillingDate() != null && Boolean.FALSE.equals(sub.getIsAutoPay()) && sub.getNextBillingDate().isBefore(LocalDate.now()))
-                .isUpcoming(sub.getNextBillingDate() != null && !sub.getNextBillingDate().isBefore(LocalDate.now())
-                        && sub.getNextBillingDate().isBefore(LocalDate.now().plusDays(4)))
-                .daysUntilDue(sub.getNextBillingDate() != null ? ChronoUnit.DAYS.between(LocalDate.now(), sub.getNextBillingDate()) : 0L)
+                .status(isRenewedToday ? "RENEWED_TODAY" : (sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
+                .isOverdue(isOverdue)
+                .isUpcoming(isUpcoming)
+                .daysUntilDue(days)
+                .isRenewedToday(isRenewedToday)
                 .build();
-
     }
 
     public BigDecimal calculateMonthlyEquivalent(Subscription sub) {
@@ -302,7 +318,8 @@ public class SubscriptionService {
         LocalDate historyDate = sub.getNextBillingDate() != null ? sub.getNextBillingDate() : sub.getPurchaseDate();
         LocalDate newDate = calculateNextDate(historyDate, sub.getBillingCycle(), sub.getCustomIntervalDays(), sub.getCustomIntervalUnit());
 
-        recordHistory(sub, historyDate);
+        // Record the payment as occurring TODAY (when the user pressed the tick)
+        recordHistory(sub, today);
 
         if (sub.getBillingCycle() == BillingCycle.ONE_TIME) {
             sub.setNextBillingDate(null);
@@ -315,7 +332,8 @@ public class SubscriptionService {
         while (newDate != null && newDate.isBefore(today)) {
             historyDate = newDate;
             newDate = calculateNextDate(newDate, sub.getBillingCycle(), sub.getCustomIntervalDays(), sub.getCustomIntervalUnit());
-            recordHistory(sub, historyDate);
+            // Even catch-up payments are recorded as occurring TODAY
+            recordHistory(sub, today);
         }
 
         sub.setNextBillingDate(newDate);
@@ -354,7 +372,7 @@ public class SubscriptionService {
 
         return subs.stream()
                 .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
-                .filter(sub -> sub.getNextBillingDate() != null && sub.getNextBillingDate().isBefore(today))
+                .filter(sub -> sub.getNextBillingDate() != null && !sub.getNextBillingDate().isAfter(today))
                 .filter(sub -> sub.getIsAutoPay() != null && !sub.getIsAutoPay())
                 .map(this::convertToResponse)
                 .toList();

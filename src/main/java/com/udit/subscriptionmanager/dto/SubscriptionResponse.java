@@ -25,5 +25,6 @@ public class SubscriptionResponse {
     private Boolean isOverdue;
     private Boolean isUpcoming;
     private Long daysUntilDue;
+    private Boolean isRenewedToday;
 }
 

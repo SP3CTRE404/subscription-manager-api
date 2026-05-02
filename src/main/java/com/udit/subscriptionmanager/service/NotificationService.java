@@ -20,7 +20,6 @@ public class NotificationService {
 
     private final SubscriptionRepository subscriptionRepository;
 
-    @Scheduled(cron = "0 0 8 * * ?")
     @Transactional(readOnly = true)
     public void checkAndSendNotifications() {
         log.info("Starting daily check for upcoming and overdue subscription payments.");
@@ -83,6 +82,7 @@ public class NotificationService {
                     email, sub.getServiceName(), action, sub.getAmount(), sub.getNextBillingDate(), daysLeft, daysLeft == 1 ? "" : "s");
         }
 
-        log.info("--- EMAIL SIMULATION ({}) --- {}", type, message);
+        // Simulation removed as per request
+
     }
 }

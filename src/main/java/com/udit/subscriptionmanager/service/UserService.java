@@ -104,6 +104,9 @@ public class UserService {
         if (request.getProfilePicture() != null) {
             user.setProfilePicture(request.getProfilePicture());
         }
+        if (request.getCurrencySymbol() != null && !request.getCurrencySymbol().isBlank()) {
+            user.setCurrencySymbol(request.getCurrencySymbol());
+        }
         return userRepository.save(java.util.Objects.requireNonNull(user));
     }
 
