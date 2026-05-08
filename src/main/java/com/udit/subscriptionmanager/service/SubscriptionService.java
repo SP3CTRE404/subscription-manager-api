@@ -76,6 +76,7 @@ public class SubscriptionService {
                 .purchaseDate(request.getPurchaseDate())
                 .status(initialStatus)
                 .isAutoPay(request.getIsAutoPay() != null ? request.getIsAutoPay() : Boolean.TRUE)
+                .currency(request.getCurrency())
                 .user(owner); // Assigns the subscription to the payer in the database
 
         // AUTO-LINK: Always link to the user's household if they have one for
@@ -156,6 +157,7 @@ public class SubscriptionService {
                 .isUpcoming(isUpcoming)
                 .daysUntilDue(days)
                 .isRenewedToday(isRenewedToday)
+                .currency(sub.getCurrency())
                 .build();
     }
 
@@ -290,6 +292,7 @@ public class SubscriptionService {
                 .amount(sub.getAmount())
                 .paymentDate(paymentDate)
                 .recordedAt(java.time.LocalDateTime.now())
+                .currency(sub.getCurrency())
                 .build();
         subscriptionHistoryRepository.save(java.util.Objects.requireNonNull(history));
     }
@@ -428,6 +431,9 @@ public class SubscriptionService {
         }
         if (request.getIsAutoPay() != null) {
             sub.setIsAutoPay(request.getIsAutoPay());
+        }
+        if (request.getCurrency() != null && !request.getCurrency().isBlank()) {
+            sub.setCurrency(request.getCurrency());
         }
 
         // RECALCULATE: If cycle or purchase date changed, and nextBillingDate wasn't explicitly provided, recalculate it.

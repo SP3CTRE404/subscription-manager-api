@@ -47,6 +47,9 @@ public class User {
     private String profilePicture;
 
     @Column
+    private String country;
+
+    @Column
     private java.time.LocalDate dateOfBirth;
 
     @ManyToOne

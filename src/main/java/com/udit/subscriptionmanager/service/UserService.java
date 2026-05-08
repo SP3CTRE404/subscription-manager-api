@@ -34,7 +34,9 @@ public class UserService {
                              String fullName,
                              java.time.LocalDate dateOfBirth,
                              boolean createHousehold,
-                             String householdName) {
+                             String householdName,
+                             String currencySymbol,
+                             String country) {
 
         // prevent duplicate email
         if (userRepository.existsByEmail(email)) {
@@ -55,6 +57,8 @@ public class UserService {
                 .fullName(fullName)
                 .dateOfBirth(dateOfBirth)
                 .createdAt(LocalDateTime.now())
+                .currencySymbol(currencySymbol != null ? currencySymbol : "₹")
+                .country(country)
                 .build();
 
         // save user first
@@ -106,6 +110,9 @@ public class UserService {
         }
         if (request.getCurrencySymbol() != null && !request.getCurrencySymbol().isBlank()) {
             user.setCurrencySymbol(request.getCurrencySymbol());
+        }
+        if (request.getCountry() != null && !request.getCountry().isBlank()) {
+            user.setCountry(request.getCountry());
         }
         return userRepository.save(java.util.Objects.requireNonNull(user));
     }

@@ -46,7 +46,9 @@ public class UserController {
                 request.getFullName(),
                 request.getDateOfBirth(),
                 request.isCreateHousehold(),
-                request.getHouseholdName()
+                request.getHouseholdName(),
+                request.getCurrencySymbol(),
+                request.getCountry()
         );
 
         return ResponseEntity.ok(savedUser);
@@ -77,6 +79,7 @@ public class UserController {
         private java.time.LocalDate dateOfBirth;
         private boolean createHousehold;
         private String householdName;
-
+        private String currencySymbol;
+        private String country;
     }
 }

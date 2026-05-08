@@ -47,4 +47,6 @@ public class SubscriptionHistory {
     public Long getSubscriptionId() {
         return subscription != null ? subscription.getId() : null;
     }
+
+    private String currency;
 }

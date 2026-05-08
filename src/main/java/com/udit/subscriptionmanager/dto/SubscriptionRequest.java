@@ -25,4 +25,5 @@ public class SubscriptionRequest {
     private Boolean isAutoPay;          // Can specify if this is an auto-renewing sub
     private Long userId;        // The user who owns it
     private Long householdId;   // Optional: The household it belongs to
+    private String currency;
 }

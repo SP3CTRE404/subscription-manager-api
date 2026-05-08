@@ -1,5 +1,6 @@
 package com.udit.subscriptionmanager.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.udit.subscriptionmanager.entity.User;
 import lombok.*;
 
@@ -14,7 +15,10 @@ public class UserResponse {
     private String fullName;
     private String phoneNumber;
     private String profilePicture;
+    @JsonProperty("currencySymbol")
     private String currencySymbol;
+    @JsonProperty("country")
+    private String country;
     private Long householdId;
     private String householdName;
     private boolean householdAdmin;
@@ -34,6 +38,7 @@ public class UserResponse {
                         && user.getHousehold().getAdmin() != null
                         && user.getHousehold().getAdmin().getId().equals(user.getId()))
                 .dateOfBirth(user.getDateOfBirth())
+                .country(user.getCountry())
                 .build();
     }
 }

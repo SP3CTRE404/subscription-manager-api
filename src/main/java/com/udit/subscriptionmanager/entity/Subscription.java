@@ -57,4 +57,7 @@ public class Subscription {
     @ManyToOne
     @JoinColumn(name = "household_id")
     private Household household;
+
+    @Column(length = 10)
+    private String currency;
 }

@@ -10,4 +10,5 @@ public class ProfileUpdateRequest {
     private String phoneNumber;
     private String profilePicture;
     private String currencySymbol;
+    private String country;
 }
