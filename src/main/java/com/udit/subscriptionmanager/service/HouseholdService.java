@@ -31,6 +31,7 @@ public class HouseholdService {
     private final UserRepository userRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final EntityManager entityManager;
+    private final NotificationService notificationService;
 
     @Transactional
     public HouseholdResponse createHousehold(User user, String name) {
@@ -72,6 +73,8 @@ public class HouseholdService {
         user.setHousehold(household);
         userRepository.save(user);
 
+        notificationService.createHouseholdJoinNotification(user, household);
+
         log.info("User '{}' joined household '{}'", user.getEmail(), household.getName());
         return convertToResponse(household);
     }
@@ -91,6 +94,8 @@ public class HouseholdService {
         user.setHousehold(null);
         userRepository.save(user);
         entityManager.flush();
+
+        notificationService.createHouseholdLeaveNotification(user, household);
 
         log.info("User '{}' left household '{}'", user.getEmail(), household.getName());
     }
@@ -186,6 +191,8 @@ public class HouseholdService {
 
         member.setHousehold(null);
         userRepository.save(member);
+
+        notificationService.createHouseholdLeaveNotification(member, household);
 
         log.info("Member '{}' removed from household '{}' by admin '{}'",
                 member.getEmail(), household.getName(), admin.getEmail());

@@ -1,8 +1,12 @@
 package com.udit.subscriptionmanager.service;
 
+import com.udit.subscriptionmanager.entity.Household;
+import com.udit.subscriptionmanager.entity.Notification;
 import com.udit.subscriptionmanager.entity.Subscription;
 import com.udit.subscriptionmanager.entity.User;
+import com.udit.subscriptionmanager.repository.NotificationRepository;
 import com.udit.subscriptionmanager.repository.SubscriptionRepository;
+import com.udit.subscriptionmanager.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -10,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
@@ -19,6 +24,63 @@ import java.util.List;
 public class NotificationService {
 
     private final SubscriptionRepository subscriptionRepository;
+    private final NotificationRepository notificationRepository;
+    private final UserRepository userRepository;
+
+    @Transactional
+    public void createHouseholdJoinNotification(User joinedUser, Household household) {
+        List<User> members = userRepository.findByHouseholdId(household.getId());
+        for (User member : members) {
+            if (member.getId().equals(joinedUser.getId())) {
+                continue; // Do not notify the person who joined
+            }
+            Notification notification = Notification.builder()
+                    .user(member)
+                    .title("Member Joined")
+                    .message(String.format("%s joined your household %s", joinedUser.getFullName(), household.getName()))
+                    .isRead(false)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            notificationRepository.save(notification);
+            log.info("Queued household join notification for user '{}' (member joined: '{}')", member.getEmail(), joinedUser.getEmail());
+        }
+    }
+
+    @Transactional
+    public void createHouseholdLeaveNotification(User leftUser, Household household) {
+        List<User> members = userRepository.findByHouseholdId(household.getId());
+        for (User member : members) {
+            if (member.getId().equals(leftUser.getId())) {
+                continue; // Do not notify the person who left
+            }
+            Notification notification = Notification.builder()
+                    .user(member)
+                    .title("Member Left")
+                    .message(String.format("%s left your household %s", leftUser.getFullName(), household.getName()))
+                    .isRead(false)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            notificationRepository.save(notification);
+            log.info("Queued household leave notification for user '{}' (member left: '{}')", member.getEmail(), leftUser.getEmail());
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<Notification> getPendingNotifications(User user) {
+        return notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(user.getId());
+    }
+
+    @Transactional
+    public void markAsRead(User user, Long notificationId) {
+        Notification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new com.udit.subscriptionmanager.exception.ResourceNotFoundException("Notification not found"));
+        if (!notification.getUser().getId().equals(user.getId())) {
+            throw new com.udit.subscriptionmanager.exception.UnauthorizedException("You do not own this notification");
+        }
+        notification.setRead(true);
+        notificationRepository.save(notification);
+        log.info("Marked notification {} as read for user {}", notificationId, user.getEmail());
+    }
 
     @Transactional(readOnly = true)
     public void checkAndSendNotifications() {
