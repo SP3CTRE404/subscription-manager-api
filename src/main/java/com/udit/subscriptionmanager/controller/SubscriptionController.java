@@ -53,7 +53,7 @@ public class SubscriptionController {
 
         boolean sameHousehold = loggedInUser.getHousehold() != null && 
                                targetUser.getHousehold() != null &&
-                               loggedInUser.getHousehold().getId() == targetUser.getHousehold().getId();
+                               java.util.Objects.equals(loggedInUser.getHousehold().getId(), targetUser.getHousehold().getId());
 
         
         boolean isAdmin = loggedInUser.isHouseholdAdmin();
@@ -176,7 +176,7 @@ public class SubscriptionController {
             Authentication authentication) {
         // Verify the user belongs to this household
         User loggedInUser = getLoggedInUser(authentication);
-        if (loggedInUser.getHousehold() == null || loggedInUser.getHousehold().getId() != householdId) {
+        if (loggedInUser.getHousehold() == null || !java.util.Objects.equals(loggedInUser.getHousehold().getId(), householdId)) {
             throw new RuntimeException("Access Denied: You can only view subscriptions for your own household.");
         }
         return ResponseEntity.ok(subscriptionService.getSubscriptionsForHousehold(java.util.Objects.requireNonNull(householdId)));

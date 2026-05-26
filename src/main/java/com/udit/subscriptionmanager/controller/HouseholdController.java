@@ -123,7 +123,7 @@ public class HouseholdController {
         // Verify the target member is in the same household
         User member = userService.findById(java.util.Objects.requireNonNull(memberId))
                 .orElseThrow(() -> new RuntimeException("Member not found"));
-        if (member.getHousehold() == null || member.getHousehold().getId() != user.getHousehold().getId()) {
+        if (member.getHousehold() == null || !java.util.Objects.equals(member.getHousehold().getId(), user.getHousehold().getId())) {
             throw new RuntimeException("That user is not in your household.");
         }
         return ResponseEntity.ok(subscriptionService.getAllSubscriptionsForUser(java.util.Objects.requireNonNull(memberId)));
