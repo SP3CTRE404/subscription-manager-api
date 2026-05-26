@@ -414,6 +414,8 @@ public class SubscriptionService {
 
         checkSubscriptionAccess(sub, loggedInUser, "modify");
 
+        boolean billingParamsChanged = false;
+
         if (request.getServiceName() != null && !request.getServiceName().isBlank()) {
             sub.setServiceName(request.getServiceName());
         }
@@ -421,16 +423,28 @@ public class SubscriptionService {
             sub.setAmount(request.getAmount());
         }
         if (request.getBillingCycle() != null) {
-            sub.setBillingCycle(request.getBillingCycle());
+            if (sub.getBillingCycle() != request.getBillingCycle()) {
+                sub.setBillingCycle(request.getBillingCycle());
+                billingParamsChanged = true;
+            }
         }
         if (request.getCustomIntervalDays() != null) {
-            sub.setCustomIntervalDays(request.getCustomIntervalDays());
+            if (!java.util.Objects.equals(sub.getCustomIntervalDays(), request.getCustomIntervalDays())) {
+                sub.setCustomIntervalDays(request.getCustomIntervalDays());
+                billingParamsChanged = true;
+            }
         }
         if (request.getCustomIntervalUnit() != null) {
-            sub.setCustomIntervalUnit(request.getCustomIntervalUnit());
+            if (sub.getCustomIntervalUnit() != request.getCustomIntervalUnit()) {
+                sub.setCustomIntervalUnit(request.getCustomIntervalUnit());
+                billingParamsChanged = true;
+            }
         }
         if (request.getPurchaseDate() != null) {
-            sub.setPurchaseDate(request.getPurchaseDate());
+            if (!java.util.Objects.equals(sub.getPurchaseDate(), request.getPurchaseDate())) {
+                sub.setPurchaseDate(request.getPurchaseDate());
+                billingParamsChanged = true;
+            }
         }
         if (request.getIsAutoPay() != null) {
             sub.setIsAutoPay(request.getIsAutoPay());
@@ -439,19 +453,18 @@ public class SubscriptionService {
             sub.setCurrency(request.getCurrency());
         }
 
-        // RECALCULATE: If cycle or purchase date changed, and nextBillingDate wasn't explicitly provided, recalculate it.
-        if (request.getNextBillingDate() == null && 
-           (request.getBillingCycle() != null || request.getPurchaseDate() != null || 
-            request.getCustomIntervalDays() != null || request.getCustomIntervalUnit() != null)) {
-            
-            LocalDate recalculated = calculateInitialNextBillingDate(
-                sub.getPurchaseDate(),
-                sub.getBillingCycle(),
-                sub.getCustomIntervalDays(),
-                sub.getCustomIntervalUnit()
-            );
-            sub.setNextBillingDate(recalculated);
-        } else if (request.getNextBillingDate() != null) {
+        // RECALCULATE: Only if cycle, purchase date, or custom intervals actually changed, and nextBillingDate wasn't explicitly provided.
+        if (request.getNextBillingDate() == null) {
+            if (billingParamsChanged) {
+                LocalDate recalculated = calculateInitialNextBillingDate(
+                    sub.getPurchaseDate(),
+                    sub.getBillingCycle(),
+                    sub.getCustomIntervalDays(),
+                    sub.getCustomIntervalUnit()
+                );
+                sub.setNextBillingDate(recalculated);
+            }
+        } else {
             sub.setNextBillingDate(request.getNextBillingDate());
         }
 
