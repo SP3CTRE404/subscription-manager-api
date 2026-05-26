@@ -95,8 +95,9 @@ public class SubscriptionService {
      * Uses a strict "Payer Model": The user assumes 100% of the cost for any
      * subscription they own, even if it is linked to a household.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public BigDecimal calculateTotalMonthlyCostForUser(@NonNull Long userId) {
+        processAutomaticRenewals();
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -359,8 +360,9 @@ public class SubscriptionService {
         return convertToResponse(savedSub);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<SubscriptionResponse> getDueSubscriptionsForUser(@NonNull Long userId) {
+        processAutomaticRenewals();
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -382,8 +384,9 @@ public class SubscriptionService {
     }
 
     // --- Gap 2.3: Get ALL subscriptions for a user (not just overdue) ---
-    @Transactional(readOnly = true)
+    @Transactional
     public List<SubscriptionResponse> getAllSubscriptionsForUser(@NonNull Long userId) {
+        processAutomaticRenewals();
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -514,8 +517,9 @@ public class SubscriptionService {
     }
 
     // --- Gap 2.6: Get all subscriptions for a household ---
-    @Transactional(readOnly = true)
+    @Transactional
     public List<SubscriptionResponse> getSubscriptionsForHousehold(@NonNull Long householdId) {
+        processAutomaticRenewals();
         return subscriptionRepository.findByMemberHouseholdId(householdId)
                 .stream()
                 .filter(sub -> "ACTIVE".equals(sub.getStatus() != null ? sub.getStatus() : "ACTIVE"))
